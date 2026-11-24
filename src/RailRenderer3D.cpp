@@ -3141,27 +3141,34 @@ void RailGame::RenderMainMenu2D() {
 }
 
 void RailGame::RenderGadgetronVendor2D() {
-    DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 720, { 8, 12, 24, 235 });
+    DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 720, { 8, 12, 24, 238 });
 
-    float cardW = 1160.0f;
-    float cardX = (virtualWidth_ - cardW) * 0.5f;
+    float uiW = 1160.0f;
+    float uiX = (virtualWidth_ - uiW) * 0.5f;
 
-    DrawText("ARSENAL", static_cast<int>(cardX), 24, 26, GOLD);
-    auto DrawArsenalTabs = [&](int activeIdx, float barY) -> bool {
+    // Unified 68px Arsenal Top Bar
+    DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 68, { 10, 14, 26, 245 });
+    DrawLine(0, 68, static_cast<int>(virtualWidth_), 68, { 255, 165, 40, 140 });
+    DrawText("ARSENAL", static_cast<int>(uiX), 21, 26, GOLD);
+
+    char curr[96];
+    std::snprintf(curr, sizeof(curr), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
+    int cw = MeasureText(curr, 18);
+    DrawText(curr, static_cast<int>(uiX + uiW - cw), 25, 18, SKYBLUE);
+
+    {
         const char* names[3] = { "WEAPONS", "MOD LAB", "WARDROBE" };
         Color cols[3] = { SKYBLUE, GREEN, PURPLE };
-        float totalW = 540.0f;
-        float startX = (virtualWidth_ - totalW) * 0.5f;
+        float startX = (virtualWidth_ - 540.0f) * 0.5f;
         for (int t = 0; t < 3; ++t) {
-            Rectangle tr = { startX + t * 184.0f, barY, 172.0f, 34.0f };
-            bool act = (t == activeIdx);
+            Rectangle tr = { startX + t * 184.0f, 17.0f, 172.0f, 34.0f };
+            bool act = (t == 0);
             DrawRectangleRec(tr, act ? cols[t] : Color{ 20, 28, 46, 245 });
             DrawRectangleLinesEx(tr, 1.5f, act ? WHITE : cols[t]);
             int nw = MeasureText(names[t], 14);
-            DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), static_cast<int>(tr.y + 10.0f), 14, act ? BLACK : WHITE);
+            DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), 27, 14, act ? BLACK : WHITE);
             if (!act && IsButtonClicked(tr)) {
-                if (t == 0) SetScreenMode(ScreenMode::GADGETRON_VENDOR);
-                else if (t == 1) SetScreenMode(ScreenMode::RARITANIUM_LAB);
+                if (t == 1) SetScreenMode(ScreenMode::RARITANIUM_LAB);
                 else {
                     wardrobePreviewArmor_ = save_.equippedArmor;
                     wardrobePreviewClank_ = save_.equippedClankSkin;
@@ -3169,21 +3176,14 @@ void RailGame::RenderGadgetronVendor2D() {
                     SetScreenMode(ScreenMode::ARMOR_WARDROBE);
                 }
                 audio_.PlayUiClick();
-                return true;
+                return;
             }
         }
-        return false;
-    };
-    if (DrawArsenalTabs(0, 20.0f)) return;
-
-    char curr[96];
-    std::snprintf(curr, sizeof(curr), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
-    int cw = MeasureText(curr, 20);
-    DrawText(curr, static_cast<int>(cardX + cardW - cw), 30, 20, SKYBLUE);
+    }
 
     const auto& cat = GetWeaponCatalog();
     for (int i = 0; i < static_cast<int>(NUM_WEAPONS); ++i) {
-        Rectangle r = { cardX, 68.0f + i * 82.0f, cardW, 76.0f };
+        Rectangle r = { uiX, 86.0f + i * 86.0f, uiW, 78.0f };
         bool unlocked = save_.unlockedWeapons[i];
         bool equipped = (save_.equippedWeapon == i);
         int lvl = save_.weaponLevels[i];
@@ -3194,20 +3194,21 @@ void RailGame::RenderGadgetronVendor2D() {
         bool isGold = save_.goldenWeapons[i];
         const char* title = isGold ? GOLDEN_WEAPON_CATALOG[i].name : ((lvl >= 5) ? cat[i].omegaName : cat[i].name);
         Color wCol = isGold ? GOLD : cat[i].projectileColor;
-        DrawText(title, static_cast<int>(r.x + 18), static_cast<int>(r.y + 8), 19, wCol);
+        DrawText(title, static_cast<int>(r.x + 18), static_cast<int>(r.y + 9), 19, wCol);
         DrawText(isGold ? GOLDEN_WEAPON_CATALOG[i].masteryPerk : cat[i].specialPerk,
-                 static_cast<int>(r.x + 18), static_cast<int>(r.y + 31), 14, isGold ? GOLD : GOLD);
-        DrawText(cat[i].description, static_cast<int>(r.x + 18), static_cast<int>(r.y + 51), 13, LIGHTGRAY);
+                 static_cast<int>(r.x + 18), static_cast<int>(r.y + 32), 14, GOLD);
+        DrawText(cat[i].description, static_cast<int>(r.x + 18), static_cast<int>(r.y + 52), 13, LIGHTGRAY);
 
         char lvlStr[32];
         if (isGold) std::snprintf(lvlStr, sizeof(lvlStr), "24K GOLD");
         else std::snprintf(lvlStr, sizeof(lvlStr), "LEVEL V%d", lvl);
-        DrawText(lvlStr, static_cast<int>(r.x + 695), static_cast<int>(r.y + 28), 19, (isGold || lvl >= 5) ? GOLD : WHITE);
+        DrawText(lvlStr, static_cast<int>(r.x + 695), static_cast<int>(r.y + 29), 19, (isGold || lvl >= 5) ? GOLD : WHITE);
 
-        Rectangle eqBtn = { r.x + 810.0f, r.y + 16.0f, 160.0f, 44.0f };
+        Rectangle eqBtn = { r.x + 810.0f, r.y + 17.0f, 160.0f, 44.0f };
         if (unlocked) {
             DrawRectangleRec(eqBtn, equipped ? GOLD : Color{ 38, 65, 98, 255 });
-            DrawText(equipped ? "EQUIPPED" : "EQUIP", static_cast<int>(eqBtn.x + 40), static_cast<int>(eqBtn.y + 14), 16,
+            int ew = MeasureText(equipped ? "EQUIPPED" : "EQUIP", 16);
+            DrawText(equipped ? "EQUIPPED" : "EQUIP", static_cast<int>(eqBtn.x + (eqBtn.width - ew) * 0.5f), static_cast<int>(eqBtn.y + 14), 16,
                      equipped ? BLACK : WHITE);
             if (IsButtonClicked(eqBtn)) {
                 save_.equippedWeapon = i;
@@ -3219,7 +3220,8 @@ void RailGame::RenderGadgetronVendor2D() {
             DrawRectangleRec(eqBtn, canBuy ? Color{ 30, 88, 58, 255 } : Color{ 50, 30, 35, 255 });
             char costStr[48];
             std::snprintf(costStr, sizeof(costStr), "BUY (%d B)", cat[i].unlockBoltCost);
-            DrawText(costStr, static_cast<int>(eqBtn.x + 20), static_cast<int>(eqBtn.y + 14), 16, canBuy ? GREEN : RED);
+            int bw = MeasureText(costStr, 15);
+            DrawText(costStr, static_cast<int>(eqBtn.x + (eqBtn.width - bw) * 0.5f), static_cast<int>(eqBtn.y + 14), 15, canBuy ? GREEN : RED);
             if (IsButtonClicked(eqBtn) && canBuy) {
                 save_.bolts -= cat[i].unlockBoltCost;
                 save_.unlockedWeapons[i] = true;
@@ -3234,14 +3236,15 @@ void RailGame::RenderGadgetronVendor2D() {
         }
 
         if (unlocked) {
-            Rectangle upBtn = { r.x + 985.0f, r.y + 16.0f, 155.0f, 44.0f };
+            Rectangle upBtn = { r.x + 985.0f, r.y + 17.0f, 155.0f, 44.0f };
             if (lvl < 5) {
                 int rCost = cat[i].upgradeRaritaniumCost * lvl;
                 bool canUp = (save_.raritanium >= rCost);
                 DrawRectangleRec(upBtn, canUp ? Color{ 30, 75, 105, 255 } : Color{ 35, 35, 45, 255 });
                 char upStr[48];
                 std::snprintf(upStr, sizeof(upStr), "+V%d (%d RARI)", lvl + 1, rCost);
-                DrawText(upStr, static_cast<int>(upBtn.x + 14), static_cast<int>(upBtn.y + 14), 15,
+                int uw = MeasureText(upStr, 14);
+                DrawText(upStr, static_cast<int>(upBtn.x + (upBtn.width - uw) * 0.5f), static_cast<int>(upBtn.y + 15), 14,
                          canUp ? SKYBLUE : GRAY);
                 if (IsButtonClicked(upBtn) && canUp) {
                     save_.raritanium -= rCost;
@@ -3256,10 +3259,10 @@ void RailGame::RenderGadgetronVendor2D() {
                 bool canForge = (save_.raritanium >= gRariCost && save_.bolts >= gBoltCost);
                 DrawRectangleRec(upBtn, canForge ? Color{ 140, 95, 20, 255 } : Color{ 45, 35, 30, 255 });
                 DrawRectangleLinesEx(upBtn, 2.0f, canForge ? GOLD : GRAY);
-                DrawText("FORGE 24K GOLD", static_cast<int>(upBtn.x + 10), static_cast<int>(upBtn.y + 8), 13, canForge ? GOLD : GRAY);
+                DrawText("FORGE 24K GOLD", static_cast<int>(upBtn.x + 12), static_cast<int>(upBtn.y + 8), 13, canForge ? GOLD : GRAY);
                 char gCostStr[48];
                 std::snprintf(gCostStr, sizeof(gCostStr), "%dB, %dR", gBoltCost, gRariCost);
-                DrawText(gCostStr, static_cast<int>(upBtn.x + 18), static_cast<int>(upBtn.y + 24), 13, canForge ? WHITE : GRAY);
+                DrawText(gCostStr, static_cast<int>(upBtn.x + 22), static_cast<int>(upBtn.y + 25), 13, canForge ? WHITE : GRAY);
                 if (IsButtonClicked(upBtn) && canForge) {
                     save_.bolts -= gBoltCost;
                     save_.raritanium -= gRariCost;
@@ -3270,15 +3273,17 @@ void RailGame::RenderGadgetronVendor2D() {
             } else {
                 DrawRectangleRec(upBtn, Color{ 48, 38, 18, 255 });
                 DrawRectangleLinesEx(upBtn, 1.5f, GOLD);
-                DrawText("24K MASTERED", static_cast<int>(upBtn.x + 14), static_cast<int>(upBtn.y + 14), 14, GOLD);
+                int mw = MeasureText("24K MASTERED", 14);
+                DrawText("24K MASTERED", static_cast<int>(upBtn.x + (upBtn.width - mw) * 0.5f), static_cast<int>(upBtn.y + 15), 14, GOLD);
             }
         }
     }
 
-    Rectangle backBtn = { cardX, 568.0f, 220.0f, 46.0f };
+    Rectangle backBtn = { uiX, 632.0f, 220.0f, 46.0f };
     DrawRectangleRec(backBtn, IsRectHovered(backBtn) ? Color{ 45, 68, 100, 255 } : Color{ 24, 36, 56, 255 });
     DrawRectangleLinesEx(backBtn, 2.0f, ORANGE);
-    DrawText("< BACK TO MENU", static_cast<int>(backBtn.x + 34), static_cast<int>(backBtn.y + 16), 16, WHITE);
+    int bkw = MeasureText("< BACK TO MENU", 16);
+    DrawText("< BACK TO MENU", static_cast<int>(backBtn.x + (backBtn.width - bkw) * 0.5f), static_cast<int>(backBtn.y + 15), 16, WHITE);
     if (IsButtonClicked(backBtn)) {
         SetScreenMode(ScreenMode::MAIN_MENU);
         audio_.PlayUiClick();
@@ -3286,27 +3291,34 @@ void RailGame::RenderGadgetronVendor2D() {
 }
 
 void RailGame::RenderRaritaniumLab2D() {
-    DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 720, { 8, 12, 24, 235 });
+    DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 720, { 8, 12, 24, 238 });
 
-    float labW = 1150.0f;
-    float labX = (virtualWidth_ - labW) * 0.5f;
+    float uiW = 1160.0f;
+    float uiX = (virtualWidth_ - uiW) * 0.5f;
 
-    DrawText("ARSENAL", static_cast<int>(labX), 36, 26, GOLD);
-    auto DrawArsenalTabs = [&](int activeIdx, float barY) -> bool {
+    // Unified 68px Arsenal Top Bar
+    DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 68, { 10, 14, 26, 245 });
+    DrawLine(0, 68, static_cast<int>(virtualWidth_), 68, { 255, 165, 40, 140 });
+    DrawText("ARSENAL", static_cast<int>(uiX), 21, 26, GOLD);
+
+    char curr[96];
+    std::snprintf(curr, sizeof(curr), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
+    int cw = MeasureText(curr, 18);
+    DrawText(curr, static_cast<int>(uiX + uiW - cw), 25, 18, SKYBLUE);
+
+    {
         const char* names[3] = { "WEAPONS", "MOD LAB", "WARDROBE" };
         Color cols[3] = { SKYBLUE, GREEN, PURPLE };
-        float totalW = 540.0f;
-        float startX = (virtualWidth_ - totalW) * 0.5f;
+        float startX = (virtualWidth_ - 540.0f) * 0.5f;
         for (int t = 0; t < 3; ++t) {
-            Rectangle tr = { startX + t * 184.0f, barY, 172.0f, 34.0f };
-            bool act = (t == activeIdx);
+            Rectangle tr = { startX + t * 184.0f, 17.0f, 172.0f, 34.0f };
+            bool act = (t == 1);
             DrawRectangleRec(tr, act ? cols[t] : Color{ 20, 28, 46, 245 });
             DrawRectangleLinesEx(tr, 1.5f, act ? WHITE : cols[t]);
             int nw = MeasureText(names[t], 14);
-            DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), static_cast<int>(tr.y + 10.0f), 14, act ? BLACK : WHITE);
+            DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), 27, 14, act ? BLACK : WHITE);
             if (!act && IsButtonClicked(tr)) {
                 if (t == 0) SetScreenMode(ScreenMode::GADGETRON_VENDOR);
-                else if (t == 1) SetScreenMode(ScreenMode::RARITANIUM_LAB);
                 else {
                     wardrobePreviewArmor_ = save_.equippedArmor;
                     wardrobePreviewClank_ = save_.equippedClankSkin;
@@ -3314,20 +3326,13 @@ void RailGame::RenderRaritaniumLab2D() {
                     SetScreenMode(ScreenMode::ARMOR_WARDROBE);
                 }
                 audio_.PlayUiClick();
-                return true;
+                return;
             }
         }
-        return false;
-    };
-    if (DrawArsenalTabs(1, 32.0f)) return;
-
-    char curr[96];
-    std::snprintf(curr, sizeof(curr), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
-    int cw = MeasureText(curr, 20);
-    DrawText(curr, static_cast<int>(labX + labW - cw), 44, 20, GOLD);
+    }
 
     auto DrawModCard = [&](int idx, const char* title, const char* desc, int& lvl, int maxLvl, int baseBoltCost) {
-        Rectangle r = { labX + (idx % 2) * 585.0f, 110.0f + (idx / 2) * 210.0f, 565.0f, 185.0f };
+        Rectangle r = { uiX + (idx % 2) * 590.0f, 92.0f + (idx / 2) * 204.0f, 570.0f, 188.0f };
         int bCost = baseBoltCost * (lvl + 1);
         bool maxed = (lvl >= maxLvl);
         bool canBuy = (!maxed && save_.bolts >= bCost);
@@ -3335,19 +3340,20 @@ void RailGame::RenderRaritaniumLab2D() {
         DrawRectangleRec(r, { 16, 24, 40, 235 });
         DrawRectangleLinesEx(r, 2.0f, canBuy ? SKYBLUE : GRAY);
         DrawText(title, static_cast<int>(r.x + 22), static_cast<int>(r.y + 16), 20, GOLD);
-        DrawTextWrapped(desc, static_cast<int>(r.x + 22), static_cast<int>(r.y + 46), 520, 15, 20, LIGHTGRAY);
+        DrawTextWrapped(desc, static_cast<int>(r.x + 22), static_cast<int>(r.y + 46), 524, 15, 20, LIGHTGRAY);
 
         for (int p = 0; p < maxLvl; ++p) {
             DrawRectangle(static_cast<int>(r.x + 22 + p * 42), static_cast<int>(r.y + 92), 34, 20,
                           (p < lvl) ? SKYBLUE : Color{ 35, 45, 62, 255 });
         }
 
-        Rectangle buyBtn = { r.x + 22.0f, r.y + 128.0f, 240.0f, 40.0f };
+        Rectangle buyBtn = { r.x + 22.0f, r.y + 128.0f, 240.0f, 42.0f };
         DrawRectangleRec(buyBtn, maxed ? DARKGRAY : (canBuy ? Color{ 30, 88, 62, 255 } : Color{ 48, 32, 38, 255 }));
         char btxt[64];
         if (maxed) std::snprintf(btxt, sizeof(btxt), "MAX UPGRADE");
         else std::snprintf(btxt, sizeof(btxt), "UPGRADE (%d BOLTS)", bCost);
-        DrawText(btxt, static_cast<int>(buyBtn.x + 24), static_cast<int>(buyBtn.y + 12), 16, maxed ? GOLD : WHITE);
+        int btw = MeasureText(btxt, 15);
+        DrawText(btxt, static_cast<int>(buyBtn.x + (buyBtn.width - btw) * 0.5f), static_cast<int>(buyBtn.y + 13), 15, maxed ? GOLD : WHITE);
 
         if (IsButtonClicked(buyBtn) && canBuy) {
             save_.bolts -= bCost;
@@ -3362,24 +3368,25 @@ void RailGame::RenderRaritaniumLab2D() {
     DrawModCard(2, "CLANK HELI-PACK OVERDRIVE", "Extends mid-air Heli-Pack glide fuel & Hyper-Boost duration.", save_.bootThrusterLevel, 5, 350);
     DrawModCard(3, "MULTIPLIER AMPLIFIER", "Accelerates Bolt Multiplier climb toward 20x.", save_.multiplierModLevel, 5, 400);
 
-    // Overdrive Hoverboots Flagship Gadget Matrix Card
-    Rectangle hgRec = { labX, 510.0f, 1150.0f, 85.0f };
+    Rectangle hgRec = { uiX, 508.0f, uiW, 92.0f };
     DrawRectangleRec(hgRec, save_.hoverbootsUnlocked ? Color{ 22, 38, 56, 240 } : Color{ 16, 24, 40, 235 });
     DrawRectangleLinesEx(hgRec, 2.0f, save_.hoverbootsUnlocked ? GOLD : ORANGE);
-    DrawText("OVERDRIVE HOVERBOOTS (FLAGSHIP GADGET)", static_cast<int>(hgRec.x + 20), static_cast<int>(hgRec.y + 12), 20, GOLD);
+    DrawText("OVERDRIVE HOVERBOOTS (FLAGSHIP GADGET)", static_cast<int>(hgRec.x + 20), static_cast<int>(hgRec.y + 14), 20, GOLD);
     DrawText("Rocket-propelled boots. Press [SHIFT] / [B] / [BOOST] during runs for 3s supersonic rush obliterating crates & laser gates!",
-             static_cast<int>(hgRec.x + 20), static_cast<int>(hgRec.y + 42), 14, LIGHTGRAY);
+             static_cast<int>(hgRec.x + 20), static_cast<int>(hgRec.y + 46), 14, LIGHTGRAY);
 
-    Rectangle hgBtn = { hgRec.x + 865.0f, hgRec.y + 18.0f, 265.0f, 48.0f };
+    Rectangle hgBtn = { hgRec.x + 875.0f, hgRec.y + 22.0f, 265.0f, 48.0f };
     if (save_.hoverbootsUnlocked) {
         DrawRectangleRec(hgBtn, Color{ 35, 75, 45, 255 });
         DrawRectangleLinesEx(hgBtn, 1.5f, GREEN);
-        DrawText("GADGET ONLINE [ACTIVE]", static_cast<int>(hgBtn.x + 22), static_cast<int>(hgBtn.y + 16), 16, GREEN);
+        int gw = MeasureText("GADGET ONLINE [ACTIVE]", 15);
+        DrawText("GADGET ONLINE [ACTIVE]", static_cast<int>(hgBtn.x + (hgBtn.width - gw) * 0.5f), static_cast<int>(hgBtn.y + 16), 15, GREEN);
     } else {
         bool canBuyHg = (save_.bolts >= 1800 && save_.raritanium >= 10);
         DrawRectangleRec(hgBtn, canBuyHg ? Color{ 140, 95, 20, 255 } : Color{ 48, 32, 38, 255 });
         DrawRectangleLinesEx(hgBtn, 2.0f, canBuyHg ? GOLD : GRAY);
-        DrawText("UNLOCK (1800 B, 10 RARI)", static_cast<int>(hgBtn.x + 18), static_cast<int>(hgBtn.y + 16), 15, canBuyHg ? WHITE : GRAY);
+        int gw = MeasureText("UNLOCK (1800 B, 10 RARI)", 14);
+        DrawText("UNLOCK (1800 B, 10 RARI)", static_cast<int>(hgBtn.x + (hgBtn.width - gw) * 0.5f), static_cast<int>(hgBtn.y + 17), 14, canBuyHg ? WHITE : GRAY);
         if (IsButtonClicked(hgBtn) && canBuyHg) {
             save_.bolts -= 1800;
             save_.raritanium -= 10;
@@ -3389,10 +3396,11 @@ void RailGame::RenderRaritaniumLab2D() {
         }
     }
 
-    Rectangle backBtn = { labX, 608.0f, 220.0f, 46.0f };
+    Rectangle backBtn = { uiX, 632.0f, 220.0f, 46.0f };
     DrawRectangleRec(backBtn, IsRectHovered(backBtn) ? Color{ 45, 68, 100, 255 } : Color{ 24, 36, 56, 255 });
     DrawRectangleLinesEx(backBtn, 2.0f, ORANGE);
-    DrawText("< BACK TO MENU", static_cast<int>(backBtn.x + 34), static_cast<int>(backBtn.y + 15), 16, WHITE);
+    int bkw = MeasureText("< BACK TO MENU", 16);
+    DrawText("< BACK TO MENU", static_cast<int>(backBtn.x + (backBtn.width - bkw) * 0.5f), static_cast<int>(backBtn.y + 15), 16, WHITE);
     if (IsButtonClicked(backBtn)) {
         SetScreenMode(ScreenMode::MAIN_MENU);
         audio_.PlayUiClick();
@@ -3400,51 +3408,41 @@ void RailGame::RenderRaritaniumLab2D() {
 }
 
 void RailGame::RenderArmorWardrobe2D() {
-    // Top Header Banner
-    DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 115, { 10, 14, 26, 235 });
-    DrawLine(0, 115, static_cast<int>(virtualWidth_), 115, PURPLE);
+    float uiW = 1160.0f;
+    float uiX = (virtualWidth_ - uiW) * 0.5f;
 
-    DrawText("ARSENAL", 50, 22, 28, GOLD);
+    // Unified 68px Arsenal Top Bar (pixel-identical to WEAPONS & MOD LAB!)
+    DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 68, { 10, 14, 26, 245 });
+    DrawLine(0, 68, static_cast<int>(virtualWidth_), 68, { 255, 165, 40, 140 });
+    DrawText("ARSENAL", static_cast<int>(uiX), 21, 26, GOLD);
+
     char curBuf[96];
     std::snprintf(curBuf, sizeof(curBuf), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
     int cw = MeasureText(curBuf, 18);
-    DrawText(curBuf, static_cast<int>(virtualWidth_ - cw - 50), 26, 18, SKYBLUE);
-    auto DrawArsenalTabs = [&](int activeIdx, float barY) -> bool {
+    DrawText(curBuf, static_cast<int>(uiX + uiW - cw), 25, 18, SKYBLUE);
+
+    {
         const char* names[3] = { "WEAPONS", "MOD LAB", "WARDROBE" };
         Color cols[3] = { SKYBLUE, GREEN, PURPLE };
-        float totalW = 540.0f;
-        float startX = (virtualWidth_ - totalW) * 0.5f;
+        float startX = (virtualWidth_ - 540.0f) * 0.5f;
         for (int t = 0; t < 3; ++t) {
-            Rectangle tr = { startX + t * 184.0f, barY, 172.0f, 34.0f };
-            bool act = (t == activeIdx);
+            Rectangle tr = { startX + t * 184.0f, 17.0f, 172.0f, 34.0f };
+            bool act = (t == 2);
             DrawRectangleRec(tr, act ? cols[t] : Color{ 20, 28, 46, 245 });
             DrawRectangleLinesEx(tr, 1.5f, act ? WHITE : cols[t]);
             int nw = MeasureText(names[t], 14);
-            DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), static_cast<int>(tr.y + 10.0f), 14, act ? BLACK : WHITE);
+            DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), 27, 14, act ? BLACK : WHITE);
             if (!act && IsButtonClicked(tr)) {
                 if (t == 0) SetScreenMode(ScreenMode::GADGETRON_VENDOR);
-                else if (t == 1) SetScreenMode(ScreenMode::RARITANIUM_LAB);
-                else {
-                    wardrobePreviewArmor_ = save_.equippedArmor;
-                    wardrobePreviewClank_ = save_.equippedClankSkin;
-                    wardrobeRotAngle_ = 180.0f;
-                    SetScreenMode(ScreenMode::ARMOR_WARDROBE);
-                }
+                else SetScreenMode(ScreenMode::RARITANIUM_LAB);
                 audio_.PlayUiClick();
-                return true;
+                return;
             }
         }
-        return false;
-    };
-    if (DrawArsenalTabs(2, 20.0f)) return;
-    const char* title = "ARMOR SUITS & CLANK OUTFITS";
-    int tw = MeasureText(title, 22);
-    DrawText(title, static_cast<int>((virtualWidth_ - tw) / 2), 72, 22, WHITE);
+    }
 
-    // -------------------------------------------------------------
-    // LEFT SIDE: 3D CHARACTER SHOWCASE PLAQUE
-    // -------------------------------------------------------------
-    Rectangle plaque = { 50.0f, 524.0f, 500.0f, 122.0f };
+    // LEFT SIDE: 3D CHARACTER SHOWCASE PLAQUE (seated cleanly above the unified y=632 Back button!)
+    Rectangle plaque = { uiX, 492.0f, 475.0f, 122.0f };
     DrawRectangleRec(plaque, { 12, 18, 30, 220 });
     DrawRectangleLinesEx(plaque, 2.0f, PURPLE);
 
@@ -3462,16 +3460,13 @@ void RailGame::RenderArmorWardrobe2D() {
     DrawText(prevName, static_cast<int>(plaque.x + 16), static_cast<int>(plaque.y + 24), 20, GOLD);
     DrawText(prevOrigin, static_cast<int>(plaque.x + 16), static_cast<int>(plaque.y + 49), 12, LIGHTGRAY);
     DrawText(prevPerk, static_cast<int>(plaque.x + 16), static_cast<int>(plaque.y + 68), 12, GREEN);
-
     DrawText("< DRAG MOUSE / SWIPE OR [A / D] TO ROTATE 3D CHARACTER >",
              static_cast<int>(plaque.x + 16), static_cast<int>(plaque.y + 94), 11, { 180, 205, 235, 200 });
 
-    // -------------------------------------------------------------
-    // RIGHT SIDE: TABS & CATALOG
-    // -------------------------------------------------------------
-    float rightColX = virtualWidth_ - 700.0f;
-    Rectangle tabLombax = { rightColX, 130.0f, 320.0f, 44.0f };
-    Rectangle tabClank  = { rightColX + 330.0f, 130.0f, 320.0f, 44.0f };
+    // RIGHT SIDE: TABS & CATALOG (aligned cleanly with uiX + uiW!)
+    float rightColX = uiX + uiW - 650.0f;
+    Rectangle tabLombax = { rightColX, 86.0f, 320.0f, 42.0f };
+    Rectangle tabClank  = { rightColX + 330.0f, 86.0f, 320.0f, 42.0f };
 
     bool hovL = IsRectHovered(tabLombax);
     bool hovC = IsRectHovered(tabClank);
@@ -3501,7 +3496,7 @@ void RailGame::RenderArmorWardrobe2D() {
     }
 
     // Content Cards
-    float startY = 184.0f;
+    float startY = 138.0f;
     float cardH  = 74.0f;
     float gapY   = 6.0f;
 
@@ -3650,12 +3645,12 @@ void RailGame::RenderArmorWardrobe2D() {
         }
     }
 
-    // Back to Menu Button
-    Rectangle backBtn = { 50.0f, 655.0f, 220.0f, 44.0f };
-    bool bHov = IsRectHovered(backBtn);
-    DrawRectangleRec(backBtn, bHov ? Color{ 45, 68, 100, 255 } : Color{ 24, 36, 56, 255 });
-    DrawRectangleLinesEx(backBtn, 1.5f, bHov ? WHITE : ORANGE);
-    DrawText("< BACK TO MENU", static_cast<int>(backBtn.x + 36), static_cast<int>(backBtn.y + 14), 16, WHITE);
+    // Unified Back to Menu Button (pixel-identical to WEAPONS & MOD LAB!)
+    Rectangle backBtn = { uiX, 632.0f, 220.0f, 46.0f };
+    DrawRectangleRec(backBtn, IsRectHovered(backBtn) ? Color{ 45, 68, 100, 255 } : Color{ 24, 36, 56, 255 });
+    DrawRectangleLinesEx(backBtn, 2.0f, ORANGE);
+    int bkw = MeasureText("< BACK TO MENU", 16);
+    DrawText("< BACK TO MENU", static_cast<int>(backBtn.x + (backBtn.width - bkw) * 0.5f), static_cast<int>(backBtn.y + 15), 16, WHITE);
     if (IsButtonClicked(backBtn)) {
         SetScreenMode(ScreenMode::MAIN_MENU);
         audio_.PlayUiClick();
@@ -3973,9 +3968,9 @@ void RailGame::RenderCareerStats2D() {
     if (IsButtonClicked(tabSp)) { SetScreenMode(ScreenMode::SKILL_POINTS_VIEW); audio_.PlayUiClick(); return; }
 
     char boltBuf[128];
-    std::snprintf(boltBuf, sizeof(boltBuf), "CURRENT: %d BOLTS  |  %d RARITANIUM", save_.bolts, save_.raritanium);
-    int bbw = MeasureText(boltBuf, 15);
-    DrawText(boltBuf, static_cast<int>(cardX + cardW - bbw), 36, 15, SKYBLUE);
+    std::snprintf(boltBuf, sizeof(boltBuf), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
+    int bbw = MeasureText(boltBuf, 18);
+    DrawText(boltBuf, static_cast<int>(cardX + cardW - bbw), 28, 18, SKYBLUE);
 
     DrawLine(static_cast<int>(cardX), 68, static_cast<int>(cardX + cardW), 68, { 255, 255, 255, 55 });
 
@@ -4049,10 +4044,11 @@ void RailGame::RenderCareerStats2D() {
 
     // Bottom Navigation Bar
     DrawLine(static_cast<int>(cardX), 580, static_cast<int>(cardX + cardW), 580, { 255, 255, 255, 45 });
-    Rectangle statsBackBtn = { cardX, 600.0f, 260.0f, 48.0f };
+    Rectangle statsBackBtn = { cardX, 600.0f, 220.0f, 48.0f };
     DrawRectangleRec(statsBackBtn, IsRectHovered(statsBackBtn) ? Color{ 45, 68, 100, 255 } : Color{ 24, 36, 56, 255 });
     DrawRectangleLinesEx(statsBackBtn, 2.0f, ORANGE);
-    DrawText("< BACK TO MENU [ESC]", static_cast<int>(statsBackBtn.x + 36), static_cast<int>(statsBackBtn.y + 16), 16, WHITE);
+    int sbw = MeasureText("< BACK TO MENU", 16);
+    DrawText("< BACK TO MENU", static_cast<int>(statsBackBtn.x + (statsBackBtn.width - sbw) * 0.5f), static_cast<int>(statsBackBtn.y + 16), 16, WHITE);
     if (IsButtonClicked(statsBackBtn) || IsKeyPressed(KEY_ESCAPE) || (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT))) {
         SetScreenMode(ScreenMode::MAIN_MENU);
         audio_.PlayUiClick();
@@ -4062,7 +4058,7 @@ void RailGame::RenderCareerStats2D() {
 void RailGame::RenderSkillPoints2D() {
     DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 720, { 8, 12, 24, 235 });
 
-    float spW = 1140.0f;
+    float spW = 1160.0f;
     float spX = (virtualWidth_ - spW) * 0.5f;
 
     DrawText("RECORDS", static_cast<int>(spX), 28, 26, GOLD);
@@ -4078,16 +4074,16 @@ void RailGame::RenderSkillPoints2D() {
     DrawText("CAREER", static_cast<int>(tabCar.x + (tabCar.width - crw) * 0.5f), 34, 14, WHITE);
     if (IsButtonClicked(tabCar)) { SetScreenMode(ScreenMode::STATS_VIEW); audio_.PlayUiClick(); return; }
     char boltBuf[128];
-    std::snprintf(boltBuf, sizeof(boltBuf), "BOLTS: %d  |  RARITANIUM: %d", save_.bolts, save_.raritanium);
-    int bbw = MeasureText(boltBuf, 15);
-    DrawText(boltBuf, static_cast<int>(spX + spW - bbw), 34, 15, SKYBLUE);
+    std::snprintf(boltBuf, sizeof(boltBuf), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
+    int bbw = MeasureText(boltBuf, 18);
+    DrawText(boltBuf, static_cast<int>(spX + spW - bbw), 28, 18, SKYBLUE);
     DrawLine(static_cast<int>(spX), 68, static_cast<int>(spX + spW), 68, { 255, 255, 255, 55 });
 
     const auto& cat = GetSkillPointCatalog();
     for (int i = 0; i < static_cast<int>(NUM_SKILL_POINTS); ++i) {
         int col = i % 2;
         int row = i / 2;
-        Rectangle r = { spX + col * 580.0f, 92.0f + row * 92.0f, 560.0f, 82.0f };
+        Rectangle r = { spX + col * 590.0f, 88.0f + row * 94.0f, 570.0f, 84.0f };
         bool done = save_.skillPoints[i];
 
         DrawRectangleRec(r, done ? Color{ 26, 46, 62, 240 } : Color{ 16, 20, 32, 225 });
@@ -4101,10 +4097,12 @@ void RailGame::RenderSkillPoints2D() {
         DrawText(rew, static_cast<int>(r.x + 410), static_cast<int>(r.y + 12), 15, done ? GREEN : SKYBLUE);
     }
 
-    Rectangle backBtn = { spX, 575.0f, 220.0f, 48.0f };
+    DrawLine(static_cast<int>(spX), 580, static_cast<int>(spX + spW), 580, { 255, 255, 255, 45 });
+    Rectangle backBtn = { spX, 600.0f, 220.0f, 48.0f };
     DrawRectangleRec(backBtn, IsRectHovered(backBtn) ? Color{ 45, 68, 100, 255 } : Color{ 24, 36, 56, 255 });
     DrawRectangleLinesEx(backBtn, 2.0f, ORANGE);
-    DrawText("< BACK TO MENU", static_cast<int>(backBtn.x + 34), static_cast<int>(backBtn.y + 16), 16, WHITE);
+    int sbw = MeasureText("< BACK TO MENU", 16);
+    DrawText("< BACK TO MENU", static_cast<int>(backBtn.x + (backBtn.width - sbw) * 0.5f), static_cast<int>(backBtn.y + 16), 16, WHITE);
     if (IsButtonClicked(backBtn)) {
         SetScreenMode(ScreenMode::MAIN_MENU);
         audio_.PlayUiClick();
