@@ -1488,10 +1488,23 @@ void RailGame::HandleInput() {
     } else if (mode_ == ScreenMode::MAIN_MENU) {
         if (screenTransitionCooldown_ <= 0.0f) {
             bool hasGamepad = IsGamepadAvailable(0);
-            // Launch Run: Space, Enter, or Gamepad (A) / Start
-            if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER) ||
+            // Toggle Standard / Daily with Left/Right or Tab
+            if (IsKeyPressed(KEY_LEFT) || (hasGamepad && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_LEFT))) {
+                menuSelectDaily_ = false;
+                audio_.PlayUiClick();
+            } else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_TAB) || (hasGamepad && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_RIGHT))) {
+                menuSelectDaily_ = true;
+                audio_.PlayUiClick();
+            }
+            // Launch Selected Mode: Space, Enter, or Gamepad (A) / Start
+            else if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER) ||
                 (hasGamepad && (IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT)))) {
-                StartNewRun(false);
+                StartNewRun(menuSelectDaily_);
+            }
+            // Arsenal shortcut: A
+            else if (IsKeyPressed(KEY_A)) {
+                SetScreenMode(ScreenMode::GADGETRON_VENDOR);
+                audio_.PlayUiClick();
             }
             // Daily Challenge Seed: X or Gamepad (X)
             else if (IsKeyPressed(KEY_X) || (hasGamepad && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_LEFT))) {

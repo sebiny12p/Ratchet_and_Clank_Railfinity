@@ -162,6 +162,8 @@ private:
     float touchFeedbackPause_ = 0.0f;
 
     // Settings state & confirmation modal
+    bool menuSelectDaily_ = false;
+    int settingsTab_ = 0;
     bool showResetConfirm_ = false;
     ScreenMode settingsPrevMode_ = ScreenMode::MAIN_MENU;
     std::string activeInputDevice_ = "KEYBOARD & MOUSE";
