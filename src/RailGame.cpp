@@ -90,6 +90,7 @@ void RailGame::UpdateVirtualResolution() {
 
 void RailGame::Init() {
     UpdateVirtualResolution();
+    InitUiFonts();
 
     audio_.Init();
     LoadSave();
@@ -282,6 +283,7 @@ void RailGame::Shutdown() {
         UnloadTexture(splashLogo_);
         splashLogo_.id = 0;
     }
+    ShutdownUiFonts();
     if (renderTarget_.id != 0) {
         UnloadRenderTexture(renderTarget_);
     }

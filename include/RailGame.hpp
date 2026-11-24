@@ -78,6 +78,8 @@ private:
     bool IsButtonClicked(Rectangle r) const;
 
     // Rendering (implemented in RailRenderer3D.cpp)
+    void InitUiFonts();
+    void ShutdownUiFonts();
     void RenderFrame();
     void RenderWorld3D();
     void RenderGrindRails3D() const;
