@@ -365,6 +365,7 @@ struct PlayerLombax {
 
     bool grounded = true;
     bool heliGliding = false;
+    bool usedAirBoost = false;
     float emergencyHoverTimer = 0.0f; // >0: Clank emergency auto-hover when rail ends beneath Ratchet
     float heliFuel = 1.2f;
     float maxHeliFuel = 1.2f;

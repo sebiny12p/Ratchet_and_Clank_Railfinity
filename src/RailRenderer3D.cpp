@@ -59,6 +59,16 @@ void DrawGameText(const char* text, int posX, int posY, int fontSize, Color colo
     }
     DrawTextEx(f, text, pos, scaledFs, spacing, color);
 }
+
+void DrawUpgradeBadge(Rectangle r, float globalTime) {
+    float pulse = 0.5f + 0.5f * std::sin(globalTime * 5.0f);
+    Vector2 c = { r.x + r.width - 10.0f, r.y + 10.0f };
+    DrawCircleV(c, 8.5f + pulse * 1.5f, Color{ 255, 210, 40, static_cast<unsigned char>(85 + pulse * 80) });
+    DrawCircleV(c, 7.5f, GOLD);
+    DrawCircleLines(static_cast<int>(c.x), static_cast<int>(c.y), 7.5f, WHITE);
+    int ew = MeasureGameText("!", 12);
+    DrawGameText("!", static_cast<int>(c.x - ew * 0.5f), static_cast<int>(c.y - 6.0f), 12, BLACK);
+}
 } // namespace
 
 void RailGame::InitUiFonts() {
@@ -2962,6 +2972,15 @@ void RailGame::RenderHud2D() {
 
     // Retro Holographic Radio Comm Chatter Box
     RenderRadioComm2D();
+
+    if (unpauseRampTimer_ > 0.0f) {
+        const char* resMsg = "RESUMING...";
+        int rw = MeasureText(resMsg, 15);
+        Rectangle pill = { virtualWidth_ * 0.5f - (rw + 36.0f) * 0.5f, 42.0f, rw + 36.0f, 30.0f };
+        DrawRectangleRec(pill, { 12, 20, 34, 215 });
+        DrawRectangleLinesEx(pill, 1.5f, SKYBLUE);
+        DrawText(resMsg, static_cast<int>(pill.x + (pill.width - rw) * 0.5f), static_cast<int>(pill.y + 8.0f), 15, GOLD);
+    }
 }
 
 void RailGame::RenderSplashIntro2D() {
@@ -3126,6 +3145,9 @@ void RailGame::RenderMainMenu2D() {
         SetScreenMode(ScreenMode::GADGETRON_VENDOR);
         audio_.PlayUiClick();
     }
+    if (HasAnyAffordableUpgrade()) {
+        DrawUpgradeBadge(btnArsenal, globalTime_);
+    }
     if (CleanMenuBtn(btnRecords, "RECORDS", 20, MAGENTA, false)) {
         SetScreenMode(ScreenMode::SKILL_POINTS_VIEW);
         audio_.PlayUiClick();
@@ -3167,6 +3189,9 @@ void RailGame::RenderGadgetronVendor2D() {
             DrawRectangleLinesEx(tr, 1.5f, act ? WHITE : cols[t]);
             int nw = MeasureText(names[t], 14);
             DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), 27, 14, act ? BLACK : WHITE);
+            if (HasAffordableArsenalTab(t)) {
+                DrawUpgradeBadge(tr, globalTime_);
+            }
             if (!act && IsButtonClicked(tr)) {
                 if (t == 1) SetScreenMode(ScreenMode::RARITANIUM_LAB);
                 else {
@@ -3317,6 +3342,9 @@ void RailGame::RenderRaritaniumLab2D() {
             DrawRectangleLinesEx(tr, 1.5f, act ? WHITE : cols[t]);
             int nw = MeasureText(names[t], 14);
             DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), 27, 14, act ? BLACK : WHITE);
+            if (HasAffordableArsenalTab(t)) {
+                DrawUpgradeBadge(tr, globalTime_);
+            }
             if (!act && IsButtonClicked(tr)) {
                 if (t == 0) SetScreenMode(ScreenMode::GADGETRON_VENDOR);
                 else {
@@ -3432,6 +3460,9 @@ void RailGame::RenderArmorWardrobe2D() {
             DrawRectangleLinesEx(tr, 1.5f, act ? WHITE : cols[t]);
             int nw = MeasureText(names[t], 14);
             DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), 27, 14, act ? BLACK : WHITE);
+            if (HasAffordableArsenalTab(t)) {
+                DrawUpgradeBadge(tr, globalTime_);
+            }
             if (!act && IsButtonClicked(tr)) {
                 if (t == 0) SetScreenMode(ScreenMode::GADGETRON_VENDOR);
                 else SetScreenMode(ScreenMode::RARITANIUM_LAB);
@@ -4113,34 +4144,49 @@ void RailGame::RenderPauseOverlay2D() {
     DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 720, { 8, 12, 22, 200 });
     const char* t = "HOLOCOMM PAUSED";
     int tw = MeasureText(t, 40);
-    DrawText(t, static_cast<int>((virtualWidth_ - tw) / 2), 220, 40, GOLD);
+    DrawText(t, static_cast<int>((virtualWidth_ - tw) / 2), 192, 40, GOLD);
 
-    Rectangle resBtn      = { virtualWidth_ / 2.0f - 160.0f, 285.0f, 320.0f, 52.0f };
-    Rectangle settingsBtn = { virtualWidth_ / 2.0f - 160.0f, 350.0f, 320.0f, 52.0f };
-    Rectangle menuBtn     = { virtualWidth_ / 2.0f - 160.0f, 415.0f, 320.0f, 52.0f };
+#if defined(PLATFORM_ANDROID)
+    bool touchClean = true;
+#else
+    bool touchClean = (activeInputDevice_ == "TOUCH SCREEN");
+#endif
+    bool hasPad = IsGamepadAvailable(0);
 
-    DrawRectangleRec(resBtn, IsRectHovered(resBtn) ? Color{ 40, 75, 110, 255 } : Color{ 22, 38, 60, 255 });
-    DrawRectangleLinesEx(resBtn, 2.0f, SKYBLUE);
-    DrawText("RESUME GRIND [SPACE / (A)]", static_cast<int>(resBtn.x + 40), static_cast<int>(resBtn.y + 17), 17, WHITE);
+    const char* resLbl  = touchClean ? "RESUME"    : (hasPad ? "RESUME (A)"     : "RESUME [SPACE]");
+    const char* rstLbl  = touchClean ? "RESTART"   : "RESTART [R]";
+    const char* setLbl  = "SETTINGS";
+    const char* menuLbl = touchClean ? "MAIN MENU" : (hasPad ? "MAIN MENU (B)"  : "MAIN MENU [ESC]");
 
-    DrawRectangleRec(settingsBtn, IsRectHovered(settingsBtn) ? Color{ 55, 45, 80, 255 } : Color{ 28, 22, 42, 255 });
-    DrawRectangleLinesEx(settingsBtn, 2.0f, PURPLE);
-    DrawText("SYSTEM SETTINGS", static_cast<int>(settingsBtn.x + 85), static_cast<int>(settingsBtn.y + 17), 17, WHITE);
+    auto DrawPauseBtn = [&](Rectangle r, const char* lbl, Color borderCol, Color hovBg, Color idleBg) -> bool {
+        bool hov = IsRectHovered(r);
+        DrawRectangleRec(r, hov ? hovBg : idleBg);
+        DrawRectangleLinesEx(r, 2.0f, borderCol);
+        int lw = MeasureText(lbl, 17);
+        DrawText(lbl, static_cast<int>(r.x + (r.width - lw) * 0.5f), static_cast<int>(r.y + (r.height - 17.0f) * 0.5f), 17, WHITE);
+        return IsButtonClicked(r);
+    };
 
-    DrawRectangleRec(menuBtn, IsRectHovered(menuBtn) ? Color{ 85, 40, 40, 255 } : Color{ 45, 24, 30, 255 });
-    DrawRectangleLinesEx(menuBtn, 2.0f, ORANGE);
-    DrawText("MAIN MENU [ESC]", static_cast<int>(menuBtn.x + 76), static_cast<int>(menuBtn.y + 17), 17, WHITE);
+    Rectangle resBtn      = { virtualWidth_ / 2.0f - 160.0f, 256.0f, 320.0f, 50.0f };
+    Rectangle rstBtn      = { virtualWidth_ / 2.0f - 160.0f, 318.0f, 320.0f, 50.0f };
+    Rectangle settingsBtn = { virtualWidth_ / 2.0f - 160.0f, 380.0f, 320.0f, 50.0f };
+    Rectangle menuBtn     = { virtualWidth_ / 2.0f - 160.0f, 442.0f, 320.0f, 50.0f };
 
-    if (IsButtonClicked(resBtn)) {
+    if (DrawPauseBtn(resBtn, resLbl, SKYBLUE, Color{ 40, 75, 110, 255 }, Color{ 22, 38, 60, 255 })) {
+        unpauseRampTimer_ = 0.75f;
         SetScreenMode(ScreenMode::PLAYING);
         audio_.PlayUiClick();
     }
-    if (IsButtonClicked(settingsBtn)) {
+    if (DrawPauseBtn(rstBtn, rstLbl, GREEN, Color{ 38, 88, 64, 255 }, Color{ 20, 48, 38, 255 })) {
+        StartNewRun(isDailyRun_);
+    }
+    if (DrawPauseBtn(settingsBtn, setLbl, PURPLE, Color{ 55, 45, 80, 255 }, Color{ 28, 22, 42, 255 })) {
+        settingsTab_ = 0;
         settingsPrevMode_ = ScreenMode::PAUSED;
         SetScreenMode(ScreenMode::SETTINGS_VIEW);
         audio_.PlayUiClick();
     }
-    if (IsButtonClicked(menuBtn)) {
+    if (DrawPauseBtn(menuBtn, menuLbl, ORANGE, Color{ 85, 40, 40, 255 }, Color{ 45, 24, 30, 255 })) {
         SaveProgress();
         SetScreenMode(ScreenMode::MAIN_MENU);
         audio_.PlayUiClick();
@@ -4169,21 +4215,44 @@ void RailGame::RenderGameOver2D() {
     DrawText(l3, static_cast<int>(virtualWidth_ / 2 - 215), 342, 18, SKYBLUE);
     DrawText(l4, static_cast<int>(virtualWidth_ / 2 - 215), 380, 17, LIGHTGRAY);
 
-    Rectangle retryBtn = { virtualWidth_ / 2.0f - 250.0f, 455.0f, 240.0f, 56.0f };
-    Rectangle menuBtn  = { virtualWidth_ / 2.0f + 10.0f,  455.0f, 240.0f, 56.0f };
+#if defined(PLATFORM_ANDROID)
+    bool touchClean = true;
+#else
+    bool touchClean = (activeInputDevice_ == "TOUCH SCREEN");
+#endif
+    bool hasPad = IsGamepadAvailable(0);
 
-    DrawRectangleRec(retryBtn, IsRectHovered(retryBtn) ? Color{ 40, 95, 65, 255 } : Color{ 24, 64, 46, 255 });
-    DrawRectangleLinesEx(retryBtn, 2.0f, GREEN);
-    DrawText("RETRY RUN [SPACE]", static_cast<int>(retryBtn.x + 32), static_cast<int>(retryBtn.y + 19), 18, WHITE);
+    const char* rtyLbl = touchClean ? "RETRY"     : (hasPad ? "RETRY (A)"     : "RETRY [SPACE]");
+    const char* arsLbl = touchClean ? "ARSENAL"   : (hasPad ? "ARSENAL (Y)"   : "ARSENAL [A]");
+    const char* mnuLbl = touchClean ? "MAIN MENU" : (hasPad ? "MAIN MENU (B)" : "MAIN MENU [ESC]");
 
-    DrawRectangleRec(menuBtn, IsRectHovered(menuBtn) ? Color{ 45, 68, 100, 255 } : Color{ 24, 36, 56, 255 });
-    DrawRectangleLinesEx(menuBtn, 2.0f, ORANGE);
-    DrawText("MAIN MENU [ESC]", static_cast<int>(menuBtn.x + 42), static_cast<int>(menuBtn.y + 19), 18, WHITE);
+    float btnW = 196.0f;
+    float gap = 14.0f;
+    float rowX = virtualWidth_ * 0.5f - (btnW * 3.0f + gap * 2.0f) * 0.5f;
+    Rectangle retryBtn = { rowX,                     455.0f, btnW, 56.0f };
+    Rectangle arsBtn   = { rowX + (btnW + gap),      455.0f, btnW, 56.0f };
+    Rectangle menuBtn  = { rowX + (btnW + gap) * 2,  455.0f, btnW, 56.0f };
 
-    if (IsButtonClicked(retryBtn)) {
+    auto DrawOverBtn = [&](Rectangle r, const char* lbl, Color borderCol, Color hovBg, Color idleBg) -> bool {
+        bool hov = IsRectHovered(r);
+        DrawRectangleRec(r, hov ? hovBg : idleBg);
+        DrawRectangleLinesEx(r, 2.0f, borderCol);
+        int lw = MeasureText(lbl, 17);
+        DrawText(lbl, static_cast<int>(r.x + (r.width - lw) * 0.5f), static_cast<int>(r.y + (r.height - 17.0f) * 0.5f), 17, WHITE);
+        return IsButtonClicked(r);
+    };
+
+    if (DrawOverBtn(retryBtn, rtyLbl, GREEN, Color{ 40, 95, 65, 255 }, Color{ 24, 64, 46, 255 })) {
         StartNewRun(isDailyRun_);
     }
-    if (IsButtonClicked(menuBtn)) {
+    if (DrawOverBtn(arsBtn, arsLbl, SKYBLUE, Color{ 38, 68, 104, 255 }, Color{ 20, 38, 62, 255 })) {
+        SetScreenMode(ScreenMode::GADGETRON_VENDOR);
+        audio_.PlayUiClick();
+    }
+    if (HasAnyAffordableUpgrade()) {
+        DrawUpgradeBadge(arsBtn, globalTime_);
+    }
+    if (DrawOverBtn(menuBtn, mnuLbl, ORANGE, Color{ 45, 68, 100, 255 }, Color{ 24, 36, 56, 255 })) {
         SetScreenMode(ScreenMode::MAIN_MENU);
         audio_.PlayUiClick();
     }

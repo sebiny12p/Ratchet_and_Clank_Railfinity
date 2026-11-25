@@ -372,8 +372,64 @@ void RailGame::AddWeaponXp(int wIdx, int amount) {
     }
 }
 
+bool RailGame::HasAffordableArsenalTab(int tab) const {
+    if (tab == 0) {
+        const auto& cat = GetWeaponCatalog();
+        for (size_t i = 0; i < NUM_WEAPONS; ++i) {
+            if (!save_.unlockedWeapons[i]) {
+                if (save_.bolts >= cat[i].unlockBoltCost) return true;
+            } else {
+                int lvl = save_.weaponLevels[i];
+                if (lvl < 5) {
+                    if (save_.raritanium >= cat[i].upgradeRaritaniumCost * lvl) return true;
+                } else if (!save_.goldenWeapons[i]) {
+                    if (save_.raritanium >= GOLDEN_WEAPON_CATALOG[i].unlockRaritaniumCost &&
+                        save_.bolts >= GOLDEN_WEAPON_CATALOG[i].unlockBoltCost) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    if (tab == 1) {
+        if (save_.armorLevel < 4 && save_.bolts >= 450 * (save_.armorLevel + 1)) return true;
+        if (save_.magnetLevel < 5 && save_.bolts >= 300 * (save_.magnetLevel + 1)) return true;
+        if (save_.bootThrusterLevel < 5 && save_.bolts >= 350 * (save_.bootThrusterLevel + 1)) return true;
+        if (save_.multiplierModLevel < 5 && save_.bolts >= 400 * (save_.multiplierModLevel + 1)) return true;
+        if (!save_.hoverbootsUnlocked && save_.bolts >= 1800 && save_.raritanium >= 10) return true;
+        return false;
+    }
+    if (tab == 2) {
+        for (size_t i = 0; i < NUM_ARMOR_SUITS; ++i) {
+            if (!save_.unlockedArmors[i] &&
+                save_.bolts >= ARMOR_CATALOG[i].boltCost &&
+                save_.raritanium >= ARMOR_CATALOG[i].raritaniumCost) {
+                return true;
+            }
+        }
+        for (size_t i = 0; i < NUM_CLANK_SKINS; ++i) {
+            if (!save_.unlockedClankSkins[i] &&
+                save_.bolts >= CLANK_SKIN_CATALOG[i].boltCost &&
+                save_.raritanium >= CLANK_SKIN_CATALOG[i].raritaniumCost) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return false;
+}
+
+bool RailGame::HasAnyAffordableUpgrade() const {
+    for (int t = 0; t < 3; ++t) {
+        if (HasAffordableArsenalTab(t)) return true;
+    }
+    return false;
+}
+
 void RailGame::StartNewRun(bool dailySeed) {
     isDailyRun_ = dailySeed;
+    unpauseRampTimer_ = 0.0f;
     if (dailySeed) {
         activeSeed_ = PCG32::GetDailyChallengeSeed();
     } else {
@@ -624,18 +680,22 @@ void RailGame::TriggerJumpOrGlide() {
     player_.slideTimer = 0.0f;
     if (player_.grounded) {
         player_.grounded = false;
+        player_.usedAirBoost = false;
         player_.vy = 18.5f;
         player_.heliGliding = false;
         audio_.PlayJump();
         SpawnParticleBurst3D({ player_.x, 0.1f, 0.0f }, 15, SKYBLUE, 2.0f, 7.0f, 0.24f, 0.35f);
     } else if (player_.heliFuel > 0.0f) {
-        // Double-jump / Mid-air Space: Engage Clank Heli-Pack Thruster Glide with lift boost!
+        // Engage Clank Heli-Pack Thruster Glide; upward double-jump lift triggers only once per leap!
         player_.heliGliding = true;
-        if (player_.vy < 5.0f) {
-            player_.vy = 8.5f;
+        if (!player_.usedAirBoost) {
+            player_.usedAirBoost = true;
+            if (player_.vy < 5.0f && player_.y < 4.15f) {
+                player_.vy = 8.5f;
+            }
+            audio_.PlayJump();
+            SpawnParticleBurst3D({ player_.x, player_.y + 0.5f, -0.25f }, 10, SKYBLUE, 2.0f, 6.0f, 0.16f, 0.25f);
         }
-        audio_.PlayJump();
-        SpawnParticleBurst3D({ player_.x, player_.y + 0.5f, -0.25f }, 10, SKYBLUE, 2.0f, 6.0f, 0.16f, 0.25f);
     }
 }
 
@@ -1197,6 +1257,16 @@ void RailGame::HandleInput() {
         ToggleFullscreen();
     }
 
+    if (IsGamepadAvailable(0)) {
+        activeInputDevice_ = GetGamepadName(0);
+        if (activeInputDevice_.empty()) activeInputDevice_ = "GAMEPAD CONTROLLER";
+    } else if (GetTouchPointCount() > 0) {
+        activeInputDevice_ = "TOUCH SCREEN";
+    } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ESCAPE) ||
+               IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_W) || IsKeyPressed(KEY_UP)) {
+        activeInputDevice_ = "KEYBOARD & MOUSE";
+    }
+
     if (mode_ == ScreenMode::PLAYING) {
         // Music Jukebox Skip: N or Gamepad Right Stick Click
         if (IsKeyPressed(KEY_N) || (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_THUMB))) {
@@ -1551,38 +1621,74 @@ void RailGame::HandleInput() {
             }
         }
     } else if (mode_ == ScreenMode::PAUSED) {
+        bool hasGamepad = IsGamepadAvailable(0);
         if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_P) || IsKeyPressed(KEY_SPACE) ||
-            (IsGamepadAvailable(0) && (IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))) {
+            (hasGamepad && (IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))) {
+            unpauseRampTimer_ = 0.75f;
             SetScreenMode(ScreenMode::PLAYING);
             audio_.PlayUiClick();
-        } else if (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) {
+        } else if (IsKeyPressed(KEY_R)) {
+            StartNewRun(isDailyRun_);
+        } else if (hasGamepad && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) {
             SaveProgress();
-            SetScreenMode(ScreenMode::MAIN_MENU);
-            audio_.PlayUiClick();
-        }
-    } else if (mode_ == ScreenMode::SETTINGS_VIEW) {
-        if (IsKeyPressed(KEY_ESCAPE) || (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT))) {
-            SaveProgress();
-            SetScreenMode(settingsPrevMode_);
-            audio_.PlayUiClick();
-        }
-    } else if (mode_ == ScreenMode::STATS_VIEW) {
-        if (IsKeyPressed(KEY_ESCAPE) || (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT))) {
             SetScreenMode(ScreenMode::MAIN_MENU);
             audio_.PlayUiClick();
         }
     } else if (mode_ == ScreenMode::GAME_OVER) {
+        bool hasGamepad = IsGamepadAvailable(0);
         if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_R) ||
-            (IsGamepadAvailable(0) && (IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT)))) {
+            (hasGamepad && (IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT)))) {
             StartNewRun(isDailyRun_);
-        } else if (IsKeyPressed(KEY_ESCAPE) || (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT))) {
+        } else if (IsKeyPressed(KEY_A) || (hasGamepad && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_UP))) {
+            SetScreenMode(ScreenMode::GADGETRON_VENDOR);
+            audio_.PlayUiClick();
+        } else if (IsKeyPressed(KEY_ESCAPE) || (hasGamepad && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT))) {
             SetScreenMode(ScreenMode::MAIN_MENU);
             audio_.PlayUiClick();
         }
-    } else if (mode_ != ScreenMode::MAIN_MENU && mode_ != ScreenMode::TITLE_FRONT_PAGE) {
-        if (IsKeyPressed(KEY_ESCAPE) || (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT))) {
-            SetScreenMode(ScreenMode::MAIN_MENU);
-            audio_.PlayUiClick();
+    } else if (mode_ != ScreenMode::MAIN_MENU && mode_ != ScreenMode::TITLE_FRONT_PAGE && mode_ != ScreenMode::SPLASH_INTRO) {
+        if (screenTransitionCooldown_ <= 0.0f) {
+            bool hasGamepad = IsGamepadAvailable(0);
+            bool padBack = hasGamepad && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT);
+            int tabDelta = 0;
+            if (IsKeyPressed(KEY_Q) || (hasGamepad && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_TRIGGER_1))) tabDelta = -1;
+            else if (IsKeyPressed(KEY_E) || (hasGamepad && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1))) tabDelta = 1;
+
+            if (IsKeyPressed(KEY_ESCAPE) || padBack) {
+                if (mode_ == ScreenMode::SETTINGS_VIEW) {
+                    if (showResetConfirm_) {
+                        showResetConfirm_ = false;
+                    } else {
+                        SaveProgress();
+                        SetScreenMode(settingsPrevMode_);
+                    }
+                } else {
+                    SetScreenMode(ScreenMode::MAIN_MENU);
+                }
+                audio_.PlayUiClick();
+            } else if (tabDelta != 0) {
+                if (mode_ == ScreenMode::GADGETRON_VENDOR || mode_ == ScreenMode::RARITANIUM_LAB || mode_ == ScreenMode::ARMOR_WARDROBE) {
+                    int curTab = (mode_ == ScreenMode::GADGETRON_VENDOR) ? 0 : (mode_ == ScreenMode::RARITANIUM_LAB ? 1 : 2);
+                    int nextTab = (curTab + tabDelta + 3) % 3;
+                    if (nextTab == 0) {
+                        SetScreenMode(ScreenMode::GADGETRON_VENDOR);
+                    } else if (nextTab == 1) {
+                        SetScreenMode(ScreenMode::RARITANIUM_LAB);
+                    } else {
+                        wardrobePreviewArmor_ = save_.equippedArmor;
+                        wardrobePreviewClank_ = save_.equippedClankSkin;
+                        wardrobeRotAngle_ = 180.0f;
+                        SetScreenMode(ScreenMode::ARMOR_WARDROBE);
+                    }
+                    audio_.PlayUiClick();
+                } else if (mode_ == ScreenMode::SKILL_POINTS_VIEW || mode_ == ScreenMode::STATS_VIEW) {
+                    SetScreenMode(mode_ == ScreenMode::SKILL_POINTS_VIEW ? ScreenMode::STATS_VIEW : ScreenMode::SKILL_POINTS_VIEW);
+                    audio_.PlayUiClick();
+                } else if (mode_ == ScreenMode::SETTINGS_VIEW) {
+                    settingsTab_ = 1 - settingsTab_;
+                    audio_.PlayUiClick();
+                }
+            }
         }
     }
 
@@ -1748,6 +1854,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
             player_.x = targetX;
             player_.y = 0.0f;
             player_.grounded = true;
+            player_.usedAirBoost = false;
             player_.landingSquashTimer = 0.25f;
             cameraShake_ = 0.20f;
             audio_.PlayRailHop();
@@ -1861,6 +1968,12 @@ void RailGame::UpdatePlayingFixed(float dt) {
         player_.vy -= grav * dt;
         player_.y += player_.vy * dt;
 
+        constexpr float MAX_PLAYER_HEIGHT = 4.65f;
+        if (player_.y > MAX_PLAYER_HEIGHT) {
+            player_.y = MAX_PLAYER_HEIGHT;
+            if (player_.vy > 0.0f) player_.vy = 0.0f;
+        }
+
         if (player_.y <= 0.0f) {
             if (IsRailActiveAt(player_.currentLane, 0.0f)) {
                 // Safe landing on active rail!
@@ -1868,6 +1981,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
                 player_.vy = 0.0f;
                 player_.grounded = true;
                 player_.heliGliding = false;
+                player_.usedAirBoost = false;
                 player_.emergencyHoverTimer = 0.0f;
                 player_.heliFuel = player_.maxHeliFuel;
                 player_.jumpTime = 0.0f;
@@ -2541,6 +2655,13 @@ void RailGame::RunFrame() {
         screenTransitionCooldown_ = std::max(0.0f, screenTransitionCooldown_ - frameDt);
     }
 
+#if !defined(PLATFORM_ANDROID)
+    if (mode_ == ScreenMode::PLAYING && (!IsWindowFocused() || IsWindowMinimized())) {
+        unpauseRampTimer_ = 0.0f;
+        SetScreenMode(ScreenMode::PAUSED);
+    }
+#endif
+
     HandleInput();
 
     int musicMode = (mode_ == ScreenMode::SPLASH_INTRO || mode_ == ScreenMode::TITLE_FRONT_PAGE) ? 0 :
@@ -2548,7 +2669,13 @@ void RailGame::RunFrame() {
     audio_.UpdateMusic(musicMode);
 
     while (accumulator_ >= FIXED_DT) {
-        UpdateFixed(FIXED_DT);
+        float simScale = 1.0f;
+        if (mode_ == ScreenMode::PLAYING && unpauseRampTimer_ > 0.0f) {
+            float frac = std::clamp(unpauseRampTimer_ / 0.75f, 0.0f, 1.0f);
+            simScale = 1.0f - 0.75f * frac;
+            unpauseRampTimer_ = std::max(0.0f, unpauseRampTimer_ - FIXED_DT);
+        }
+        UpdateFixed(FIXED_DT * simScale);
         accumulator_ -= FIXED_DT;
     }
 

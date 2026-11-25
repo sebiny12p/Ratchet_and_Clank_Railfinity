@@ -76,6 +76,8 @@ private:
     Vector2 ToVirtualCoords(Vector2 screenPos) const;
     bool IsRectHovered(Rectangle r) const;
     bool IsButtonClicked(Rectangle r) const;
+    bool HasAffordableArsenalTab(int tab) const;
+    bool HasAnyAffordableUpgrade() const;
 
     // Rendering (implemented in RailRenderer3D.cpp)
     void InitUiFonts();
@@ -125,6 +127,7 @@ private:
     uint64_t activeSeed_ = 0;
 
     float accumulator_ = 0.0f;
+    float unpauseRampTimer_ = 0.0f;
     float globalTime_ = 0.0f;
     float runTime_ = 0.0f;
     float distanceMeters_ = 0.0f;
