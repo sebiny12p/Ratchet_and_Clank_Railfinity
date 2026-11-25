@@ -22,6 +22,7 @@ An infinite, procedural 3D action grindrail runner built in **C++20** with **Ray
 - 🚆 **Committed Grindrail Movement:** Smooth `0.29s` rail-to-rail flips with input buffering and dynamic 3-rail corridors.
 - 🌍 **Shuffled Galactic Sectors & Smooth Transitions:** Every run randomizes the order of all 8 sectors (or uses the daily seed), complete with 40m atmospheric crossfades, spatial upcoming landmarks, and 3D Warp Gate rings.
 - 👾 **4 Unique Boss Battles:** Face the *Prog Twins Warship*, *Emperor Nefarious Dread-Frigate*, *Captain Slag Sky-Galleon*, and *Bioliterator Dread-Mech*, each with custom 3D hulls and distinct attack patterns.
+- ✨ **Streamlined Hub & QOL Polish:** Anti-aliased `Roboto` UI typography, clean 4-button hub (`PLAY`, `ARSENAL`, `RECORDS`, `SETTINGS`), focus-loss auto-pause, smooth `0.75s` unpause speed ramp-in, `Q`/`E` (`LB`/`RB`) tab cycling, and live `"!"` upgrade badges.
 
 ---
 
@@ -75,10 +76,10 @@ Level up weapons through combat usage from base V1 up to devastating V5 Omega, a
 Each run shuffles the order of all 8 sectors (seeded daily in Daily Challenge mode) with smooth 40m sky/landmark transitions:
 
 1. **Metropolis Kerwan (Solana Galaxy):** Ringed gas giant horizon, futuristic skyscrapers, and cruising hover-traffic.
-2. **Corson V ? Nefarious City (Polaris):** Neon-magenta cyberpunk skyline, diagonal rain, and hovering air-taxis.
-3. **Planet Gaspar ? Volcanic Core:** Molten magma basin with obsidian spires and erupting pyro-geysers.
-4. **Pokitaru ? Jowai Resort Coast:** Sunlit azure ocean, sandy palm-tree islands, and leaping cyber-piranhas.
-5. **Torren IV ? Molonoth Scrap Fields:** Rusted wasteland canyons with industrial scrap towers and crane gantries.
+2. **Corson V — Nefarious City (Polaris):** Neon-magenta cyberpunk skyline, diagonal rain, and hovering air-taxis.
+3. **Planet Gaspar — Volcanic Core:** Molten magma basin with obsidian spires and erupting pyro-geysers.
+4. **Pokitaru — Jowai Resort Coast:** Sunlit azure ocean, sandy palm-tree islands, and leaping cyber-piranhas.
+5. **Torren IV — Molonoth Scrap Fields:** Rusted wasteland canyons with industrial scrap towers and crane gantries.
 6. **Megacorp Weapons Park (Bogon Galaxy):** Enclosed industrial foundry with overhead catwalks and shielded enforcers.
 7. **Zordoom Prison Maximum Security:** High-security galactic penitentiary with crimson lockdown grids.
 8. **Dimensionator Rift Anomaly:** Psionic violet dimensional tear with floating crystal obelisks and rift rings.

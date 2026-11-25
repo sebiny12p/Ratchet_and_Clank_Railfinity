@@ -61,6 +61,7 @@ else()
 endif()
 
 if (WIN32)
+    target_sources(RatchetAndClankRailfinity PRIVATE src/app.rc)
     set_target_properties(RatchetAndClankRailfinity PROPERTIES WIN32_EXECUTABLE TRUE)
     target_link_libraries(RatchetAndClankRailfinity PRIVATE winmm gdi32 opengl32)
     if (MINGW)
