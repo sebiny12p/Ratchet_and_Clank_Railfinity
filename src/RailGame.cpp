@@ -313,6 +313,8 @@ void RailGame::LoadSave() {
             save_.equippedClankSkin = std::clamp(save_.equippedClankSkin, 0, static_cast<int>(NUM_CLANK_SKINS) - 1);
             save_.unlockedArmors[0] = true;
             save_.unlockedClankSkins[0] = true;
+            save_.totalBoltsEarnedLifetime = std::max(save_.totalBoltsEarnedLifetime, save_.bolts);
+            save_.totalRaritaniumEarnedLifetime = std::max(save_.totalRaritaniumEarnedLifetime, save_.raritanium);
             audio_.SetMasterVolume(save_.masterVolume);
             audio_.SetMusicVolume(save_.musicVolume);
             audio_.SetSfxVolume(save_.sfxVolume);
@@ -338,6 +340,7 @@ void RailGame::AwardSkillPoint(int idx) {
     save_.skillPoints[idx] = true;
     const auto& sp = SKILL_POINT_CATALOG[idx];
     save_.bolts += sp.boltReward;
+    save_.totalBoltsEarnedLifetime += sp.boltReward;
     SaveProgress();
 
     toast_.active = true;
@@ -1129,13 +1132,13 @@ void RailGame::SpawnHazard(HazardKind kind, int lane, float z, float lengthZ) {
     }
 }
 
-void RailGame::SpawnBoltShower(Vector3 origin, int count, bool includeRaritanium) {
+void RailGame::SpawnBoltShower(Vector3 origin, int count, int raritaniumCount) {
     int spawned = 0;
     for (auto& b : bolts_) {
         if (!b.active) {
             b.active = true;
-            b.isRaritanium = (includeRaritanium && spawned == 0);
-            b.isTitanium = (!b.isRaritanium && spawned == 1 && rng_.Chance(0.25f));
+            b.isRaritanium = (spawned < raritaniumCount);
+            b.isTitanium = (!b.isRaritanium && spawned == raritaniumCount && rng_.Chance(0.25f));
             b.onRail = false; // Scattered shower bolt -> immediately magnetized to Ratchet!
             b.pos = { origin.x + rng_.RangeFloat(-1.2f, 1.2f),
                       origin.y + rng_.RangeFloat(0.4f, 2.2f),
@@ -1772,6 +1775,16 @@ void RailGame::UpdatePlayingFixed(float dt) {
         lastSector_ = curSec;
         sectorBannerTimer_ = 3.5f;
         GrantWeaponAmmo(50, true);
+        if (isDailyRun_) {
+            save_.raritanium += 2;
+            save_.totalRaritaniumEarnedLifetime += 2;
+            runRaritaniumEarned_ += 2;
+            audio_.PlayRaritaniumPickup();
+            toast_.active = true;
+            toast_.title = "DAILY SECTOR CLEARED!";
+            toast_.subtitle = "+2 Bonus Raritanium & +50% Weapon Ammo Restocked";
+            toast_.timer = 3.2f;
+        }
         screenFlashColor_ = (curSec == GalaxySector::CORSON_V || curSec == GalaxySector::DIMENSIONATOR_RIFT) ? MAGENTA
                           : (curSec == GalaxySector::GASPAR_VOLCANIC || curSec == GalaxySector::TORREN_IV_SCRAP) ? ORANGE
                           : (curSec == GalaxySector::ZORDOOM_PRISON) ? RED : SKYBLUE;
@@ -2069,7 +2082,11 @@ void RailGame::UpdatePlayingFixed(float dt) {
                     other.kind == HazardKind::THUG_DRONE || other.kind == HazardKind::SHIELDED_ENFORCER) {
                     other.active = false;
                     killedSomething = true;
-                    SpawnBoltShower({ GetLaneX(other.lane), 1.2f, other.z }, 5, other.kind == HazardKind::RARITANIUM_CACHE);
+                    bool othEnemy = (other.kind == HazardKind::THUG_DRONE || other.kind == HazardKind::SHIELDED_ENFORCER);
+                    int othRari = (other.kind == HazardKind::RARITANIUM_CACHE)
+                                ? ((isDailyRun_ || distanceMeters_ >= 750.0f) ? 2 : 1)
+                                : ((othEnemy && rng_.Chance(0.20f)) ? 1 : 0);
+                    SpawnBoltShower({ GetLaneX(other.lane), 1.2f, other.z }, 5 + othRari, othRari);
                 }
             }
         }
@@ -2135,8 +2152,11 @@ void RailGame::UpdatePlayingFixed(float dt) {
                 }
                 SpawnParticleBurst3D({ GetLaneX(h.lane), 1.0f, h.z }, 22,
                                      isEnemy ? ORANGE : ((isRari || isNano) ? SKYBLUE : GOLD), 3.0f, 11.0f, 0.26f, 0.4f);
-                // OmniWrench melee smash grants +2 bonus Bolts!
-                SpawnBoltShower({ GetLaneX(h.lane), 1.0f, h.z }, isRari ? 10 : (isEnemy ? 9 : 7), isRari);
+                // OmniWrench melee smash grants +2 bonus Bolts & 25% Raritanium chance on enemies (2x cache yield past 750m / Daily)!
+                int rariDrop = isRari
+                             ? ((isDailyRun_ || distanceMeters_ >= 750.0f) ? 2 : 1)
+                             : ((isEnemy && rng_.Chance(0.25f)) ? 1 : 0);
+                SpawnBoltShower({ GetLaneX(h.lane), 1.0f, h.z }, isRari ? 10 : (isEnemy ? 9 : 7), rariDrop);
                 continue;
             }
         }
@@ -2161,7 +2181,11 @@ void RailGame::UpdatePlayingFixed(float dt) {
                     audio_.PlayExplosion();
                     cameraShake_ = std::max(cameraShake_, 0.35f);
                     SpawnParticleBurst3D({ GetLaneX(h.lane), 1.2f, h.z }, 24, GOLD, 4.0f, 14.0f, 0.30f, 0.40f);
-                    SpawnBoltShower({ GetLaneX(h.lane), 1.2f, h.z }, 7, h.kind == HazardKind::RARITANIUM_CACHE);
+                    bool boostEnemy = (h.kind == HazardKind::THUG_DRONE || h.kind == HazardKind::SHIELDED_ENFORCER || h.kind == HazardKind::HOVER_TAXI);
+                    int boostRari = (h.kind == HazardKind::RARITANIUM_CACHE)
+                                  ? ((isDailyRun_ || distanceMeters_ >= 750.0f) ? 2 : 1)
+                                  : ((boostEnemy && rng_.Chance(0.20f)) ? 1 : 0);
+                    SpawnBoltShower({ GetLaneX(h.lane), 1.2f, h.z }, 7 + boostRari, boostRari);
                     if (h.kind == HazardKind::THUG_DRONE || h.kind == HazardKind::SHIELDED_ENFORCER || h.kind == HazardKind::HOVER_TAXI) {
                         runKills_++;
                         save_.totalEnemiesDestroyed++;
@@ -2318,8 +2342,12 @@ void RailGame::UpdatePlayingFixed(float dt) {
                                 SpawnParticleBurst3D({ GetLaneX(adj.lane), 1.2f, adj.z }, 12, SKYBLUE, 3.0f, 10.0f, 0.22f, 0.30f);
                                 if (adj.hp <= 0.0f) {
                                     bool adjRari = (adj.kind == HazardKind::RARITANIUM_CACHE);
+                                    bool adjEnemy = (adj.kind == HazardKind::THUG_DRONE || adj.kind == HazardKind::SHIELDED_ENFORCER);
+                                    int adjRariDrop = adjRari
+                                                    ? ((isDailyRun_ || distanceMeters_ >= 750.0f) ? 2 : 1)
+                                                    : ((adjEnemy && rng_.Chance(0.20f)) ? 1 : 0);
                                     adj.active = false;
-                                    SpawnBoltShower({ GetLaneX(adj.lane), 1.2f, adj.z }, 6, adjRari);
+                                    SpawnBoltShower({ GetLaneX(adj.lane), 1.2f, adj.z }, 6 + adjRariDrop, adjRariDrop);
                                 }
                             }
                         }
@@ -2373,7 +2401,10 @@ void RailGame::UpdatePlayingFixed(float dt) {
                             if (p.sourceWeapon == WeaponId::RYNO_INFINITE) {
                                 boltCount = wasEnemy ? 11 : 8;
                             }
-                            SpawnBoltShower({ hx, 1.2f, hZ }, boltCount, wasRari || (wasEnemy && rng_.Chance(0.2f)));
+                            int shotRari = wasRari
+                                         ? ((isDailyRun_ || distanceMeters_ >= 750.0f) ? 2 : 1)
+                                         : ((wasEnemy && rng_.Chance(0.20f)) ? 1 : 0);
+                            SpawnBoltShower({ hx, 1.2f, hZ }, boltCount + shotRari, shotRari);
                             if (wasEnemy) {
                                 runKills_++;
                                 save_.totalEnemiesDestroyed++;
@@ -2496,13 +2527,15 @@ void RailGame::UpdatePlayingFixed(float dt) {
         if (!b.onRail && d < 1.95f) {
             b.active = false;
             if (b.isRaritanium) {
-                save_.raritanium += 1;
-                runRaritaniumEarned_ += 1;
+                save_.raritanium += b.value;
+                save_.totalRaritaniumEarnedLifetime += b.value;
+                runRaritaniumEarned_ += b.value;
                 audio_.PlayRaritaniumPickup();
                 AwardSkillPoint(8);
             } else {
                 int gained = b.value * player_.multiplierTier;
                 save_.bolts += gained;
+                save_.totalBoltsEarnedLifetime += gained;
                 runBoltsEarned_ += gained;
                 audio_.PlayBoltPickup();
             }

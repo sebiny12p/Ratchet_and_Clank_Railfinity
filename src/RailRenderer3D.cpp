@@ -3096,6 +3096,9 @@ void RailGame::RenderMainMenu2D() {
     float menuW = 310.0f;
 
     // 2-Segment Mode Toggle: [ STANDARD ] | [ DAILY ]
+    if (menuSelectDaily_) {
+        DrawText("DAILY BONUS: 2x RARITANIUM CACHES & +2 RARI / SECTOR", static_cast<int>(menuX), 158, 12, GOLD);
+    }
     Rectangle segStd   = { menuX,                  178.0f, menuW * 0.5f - 3.0f, 38.0f };
     Rectangle segDaily = { menuX + menuW * 0.5f + 3.0f, 178.0f, menuW * 0.5f - 3.0f, 38.0f };
 

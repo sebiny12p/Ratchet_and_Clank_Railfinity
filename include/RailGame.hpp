@@ -55,7 +55,7 @@ private:
     void SpawnChunkPattern(float startZ);
     void SpawnHazard(HazardKind kind, int lane, float z, float lengthZ = 3.0f);
     void SpawnRailBoltLine(int lane, float startZ, int count, float spacing = 2.4f, bool jumpArc = false);
-    void SpawnBoltShower(Vector3 origin, int count, bool includeRaritanium = false);
+    void SpawnBoltShower(Vector3 origin, int count, int raritaniumCount = 0);
     void SpawnProjectile(Vector3 pos, Vector3 vel, int lane, WeaponId wId, float dmg, float radius, Color col, bool friendly, int bounces = 0);
     void SpawnParticleBurst3D(Vector3 pos, int count, Color color, float minSpd, float maxSpd, float size, float life);
     void TriggerBossDropship();
