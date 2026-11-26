@@ -1,6 +1,6 @@
 # Ratchet & Clank: Railfinity
 
-An infinite, procedural 3D action grindrail runner built in **C++20** with **Raylib 5.0** for PC and Android, inspired by *Ratchet & Clank: Rift Apart* and *Before the Nexus*. Grind high-speed plasma rails across iconic galactic sectors, deploy Clank's Heli-Pack with authentic procedural animations, smash Bolt Crates and Raritanium caches with the OmniWrench 8000, build a 20x Bolt Multiplier, customize heroes in the 3D Armor Wardrobe Lab (including **playable Rivet & companion Kit!**), evolve weapons to Golden V8 forms, and listen to hilarious holographic radio comms from Captain Qwark and Dr. Nefarious!
+An infinite, procedural 3D action grindrail runner built in **C++20** with **Raylib 5.0** for Windows and Android, inspired by *Ratchet & Clank: Rift Apart* and *Before the Nexus*. Grind high-speed plasma rails across 8 shuffled galactic sectors, deploy Clank's Heli-Pack and Swingshot grapples, smash Bolt Crates and Raritanium caches with the OmniWrench 8000, rotate across 6 upgradeable Gadgetron weapons, customize **Ratchet, Rivet, Clank, and Kit** in an interactive 3D Wardrobe Lab, and take on daily Dreadzone mutators and live radio dares from Captain Qwark and Dr. Nefarious.
 
 > **Studio:** Sebiny Labs  
 > **IP Disclaimer:** Non-commercial fan tribute created for educational and portfolio purposes. *Ratchet & Clank*, *Rift Apart*, and *Before the Nexus* are registered trademarks and copyright of **Sony Interactive Entertainment LLC / Insomniac Games**.  
@@ -10,35 +10,33 @@ An infinite, procedural 3D action grindrail runner built in **C++20** with **Ray
 
 ---
 
-## What's New in the Latest Release
+## Game Modes, Daily Mutators & Live Radio Dares
 
-- 🔩 **Playable Rivet (Rebel Lombax):** Authentic platinum fur, royal violet ear and tail stripes, cyan eye signature, and high-fidelity 3D cybernetic mechanical arm with exposed hydraulic pistons!
-- 🤖 **KT-74-610 // Kit Companion:** Rivet's courageous warbot companion featuring warm copper plating, dual horn sensor antennae, and sunny yellow camera optics.
-- 🥋 **3D Armor Wardrobe Lab:** Fully interactive 3D character showcase with real-time mouse/touch rotation, suit perk badges, and isolated companion robot customization.
-- 📻 **Dynamic Radio Comm Chatter & Live Dares:** In-run holographic transmissions from Captain Qwark, Dr. Nefarious, and Clank — including **7 live mid-run skill dares** (*Wrench Fu*, *Untouchable*, *Drone Safari*, *Aerial Calibration*, *Pyrotechnics*, *Rail Weaver*, *Combo Showtime*) that drop bonus Bolts & Raritanium on the rails!
-- 🎯 **8 Daily Arena Mutators & 12 Daily Contracts:** Daily runs rotate across 8 tactical Hazard + Perk arena modifiers (*Armored Convoy*, *High-Voltage Grid*, *Volatile Cargo*, *Overclocked Rails*, *Aerial Assault*, *Gadgetron Overload*, *Raritanium Rush*, *Deadlocked Gauntlet*), paired with 3 daily Dreadzone Contracts (`2x` faster in Daily!) inside `RECORDS -> BOUNTIES`.
-- 🏆 **Raritanium Lab & Golden Weapons (V8 Mastery):** Forge V5 Omega firearms into Golden Weapons with custom gold plating, incendiary ammo, and ricochet tri-blades.
-- 🎵 **Soundtrack Jukebox:** Cycle between 4 authentic Insomniac soundtracks in real time (*Rift Apart Main Theme*, *A Crack in Time*, *Going Commando - Tabora*, *Up Your Arsenal - Marcadia*).
-- 🔫 **Tactical Weapon Range & Ammo Loop:** Each of the 5 firearms has its own optimal range (`34m`–`128m`) and ammo reserve, restocked by smashing crates with the unlimited **OmniWrench 8000** (`+30%`) and entering new sectors (`+50%`).
-- 🚆 **Committed Grindrail Movement:** Smooth `0.29s` rail-to-rail flips with input buffering and dynamic 3-rail corridors.
-- 🌍 **Shuffled Galactic Sectors & Smooth Transitions:** Every run randomizes the order of all 8 sectors (or uses the daily seed), complete with 40m atmospheric crossfades, spatial upcoming landmarks, and 3D Warp Gate rings.
-- 👾 **4 Unique Boss Battles:** Face the *Prog Twins Warship*, *Emperor Nefarious Dread-Frigate*, *Captain Slag Sky-Galleon*, and *Bioliterator Dread-Mech*, each with custom 3D hulls and distinct attack patterns.
-- ✨ **Streamlined Hub & QOL Polish:** Anti-aliased `Roboto` UI typography, clean 4-button hub (`PLAY`, `ARSENAL`, `RECORDS`, `SETTINGS`), focus-loss auto-pause, smooth `0.75s` unpause speed ramp-in, `Q`/`E` (`LB`/`RB`) tab cycling, and live `"!"` upgrade badges.
+### 1. Endless Grind & Daily Arena Challenge
+- **Endless Grind:** Randomized 8-sector tour with escalating rail speeds, dynamic 3-rail corridor shifts, `20x` Bolt Multiplier progression, and Boss Dropship ambushes.
+- **Daily Challenge (8 Rotating Arena Mutators):** Seeded daily track featuring one of **8 Hazard + Perk mutators** (*Armored Convoy*, *High-Voltage Grid*, *Volatile Cargo*, *Overclocked Rails*, *Aerial Assault*, *Gadgetron Overload*, *Raritanium Rush*, and *Deadlocked Gauntlet*), awarding bonus **Raritanium** on sector clears and `2x` contract progress.
+
+### 2. Daily Dreadzone Contracts, Skill Points & Radio Dares
+- **12 Rotating Bounties (`Records -> Bounties`):** 3 daily contracts per day awarding substantial **Bolts** and **Raritanium**.
+- **7 Live Mid-Run Radio Dares:** Captain Qwark, Dr. Nefarious, and Clank broadcast spontaneous 30-second stunt dares mid-run (*Wrench Fu*, *Untouchable*, *Drone Safari*, *Aerial Calibration*, *Pyrotechnics*, *Rail Weaver*, *Combo Showtime*) that shower bonus Bolts & Raritanium directly onto the rails.
+- **10 Insomniac Skill Points & Career Dossier:** Classic skill challenges and full lifetime telemetry tracking distance grinded, crates smashed, bosses defeated, and weapon mastery.
 
 ---
 
-## Character & Armor Systems
+## Character & Armor Systems (3D Wardrobe Lab)
 
-### 1. Lombax Hero Suits (3D Wardrobe Lab)
+Preview and rotate heroes `360°` in real time in **Arsenal -> Wardrobe**, featuring custom 3-point studio lighting, glossy corneal eye catchlights, natural blinking, eye saccades, and expressive Lombax animations:
+
+### 1. Lombax Hero Suits
 
 | Suit Name | Origin & Lore | Perk & Signature Effect | Cost |
 | :--- | :--- | :--- | :--- |
 | **Classic Commando** | Solana & Bogon Aviator | Ratchet's iconic pilot vest & Bogon denim. Balanced, agile, and timeless. | Default (Free) |
-| **Carbonox Armor** | Going Commando / Up Your Arsenal | Forged from nanotech graphite alloy. **+1 Extra Nanotech HP** & cyan electric grind sparks. | 2,000 B / 8 R |
-| **Rebel Lombax** | Sargasso Rebel Cell // Rift Apart | Playable Rivet with cybernetic arm, platinum fur, and cyan/violet spark motes. | 2,500 B / 0 R |
-| **Infernox Armor** | Megacorp Thermal Weapons Lab | Active volcanic core plates. Radiates magma embers & **magnetizes nearby crates (+0.65m)**. | 4,500 B / 15 R |
-| **Deadlocked Marauder** | Dreadzone Combat Arena | Heavy spiked gladiator battlegear. **1.25x Wrench Melee Damage** & shockwaves. | 6,500 B / 25 R |
-| **Lombax Praetorian** | Ancient Dimensional Archive | Ceremonial pearl-gold royal regalia. **1.5x Bolt Multiplier Escalation Rate**. | 9,000 B / 35 R |
+| **Carbonox Armor** | Going Commando / Up Your Arsenal | Nanotech graphite alloy. **+1 Extra Nanotech HP** & cyan electric grind sparks. | 2,000 B / 8 R |
+| **Rebel Lombax** | Sargasso Rebel Cell // Rift Apart | Playable **Rivet** with 3D cybernetic arm, platinum fur, and cyan/violet sparks. | 2,500 B / 0 R |
+| **Infernox Armor** | Megacorp Thermal Weapons Lab | Active volcanic core plates. Radiates magma embers & **magnetizes crates (+0.65m)**. | 4,500 B / 15 R |
+| **Deadlocked Marauder** | Dreadzone Combat Arena | Heavy gladiator battlegear. **1.25x Wrench Melee Damage** & shockwaves. | 6,500 B / 25 R |
+| **Lombax Praetorian** | Ancient Dimensional Archive | Ceremonial pearl-gold regalia. **1.5x Bolt Multiplier Escalation Rate**. | 9,000 B / 35 R |
 
 ### 2. Companion Robot Outfits
 
@@ -52,44 +50,51 @@ An infinite, procedural 3D action grindrail runner built in **C++20** with **Ray
 
 ---
 
-## Gadgetron & GrummelNet Weapon Arsenal
+## Gadgetron Arsenal, Tactical Ammo & Raritanium Lab
 
-Level up weapons through combat usage from base V1 up to devastating V5 Omega, and forge them into Golden V8 Mastery:
+Level up weapons through combat usage from **V1** to **V5 Omega**, then forge them with Raritanium into **Golden Mastery** forms:
 
-1. **OmniWrench 8000 (Default Melee):**
-   - Resource-free instant horizontal 180° sweep that shatters crates and barriers.
-   - Low-grind crouching slide (`S / Down / L-Ctrl`) spins the wrench along the rail to collect low bolts and duck under laser gates.
-2. **Combuster ➔ Magma Combuster ➔ Golden Combuster:**
-   - Rapid-fire twin plasma blaster. V8 mastery fires dual incendiary magma rounds.
-3. **Constructo Shotgun ➔ Shockwave Cannon ➔ Golden Shockwave:**
-   - Wide-spread concussive blast clearing all 3 rails simultaneously.
-4. **Buzz Blades ➔ Doom Blades ➔ Golden Buzz Blades:**
-   - High-velocity serrated sawblades that ricochet across adjacent rails and split into tri-blades.
-5. **Plasma Striker ➔ Stalker ➔ Golden Plasma Striker:**
-   - Instant-hit sniper laser beam piercing through all obstacles from horizon to horizon.
-6. **R.Y.N.O. Infinite ("Rip You a New One" - V5 Omega / Golden):**
-   - The legendary superweapon unleashing an apocalyptic swarm of micro-missiles accompanied by Tchaikovsky's 1812 Overture fanfare!
+1. **OmniWrench 8000 (Unlimited Melee):** Heavy forward melee strike that shatters crates/drones, deflects incoming enemy plasma bolts, and earns `+2` bonus Bolts per crate.
+2. **Magma Combuster:** Rapid-fire twin/triple plasma stream dealing `2.5x` shield-melter damage to armored Enforcers.
+3. **Constructo Shotgun:** 3-rail concussive shockwave spread that vaporizes incoming enemy shots mid-air.
+4. **Buzz Blades:** High-RPM saw discs with smart cross-rail pinball ricochet across all 3 active lanes.
+5. **Plasma Striker:** Instant rail-piercing sniper hyperbeam that arcs EMP chain-lightning to adjacent rails.
+6. **R.Y.N.O. Infinite:** Locks homing micro-missiles across all 3 rails with explosive AoE blasts and `+50%` Bolt jackpots.
+
+### Tactical Ammo Economy & Arsenal Rotation
+- **Scarce Gadgetron Ammo Crates:** Standard Bolt, Nanotech, and Raritanium crates never refund bullets; instead, dedicated steel-and-orange **Gadgetron Ammo Crates** (and close-quarters OmniWrench takedowns on armored Enforcers) drop finite ammo packs.
+- **Cross-Arsenal Drops:** Ammo pickups weight `80%` toward your unequipped firearms and auto-cycle to your next loaded gun when empty, rewarding active switching across all 6 weapons.
+- **Raritanium Mod Lab:** Invest Raritanium crystals into Nanotech Armor HP, Box-Breaker Magnet range, Heli-Pack & Boost Thrusters, Multiplier Escalation, Overdrive Hoverboots, and Golden Weapons.
 
 ---
 
-## 8 Procedural Galactic Sectors & 4 Unique Bosses
+## 8 Shuffled Galactic Sectors & 4 Boss Encounters
 
-Each run shuffles the order of all 8 sectors (seeded daily in Daily Challenge mode) with smooth 40m sky/landmark transitions:
+Each run shuffles all 8 sectors with smooth 40m atmospheric crossfades, spatial upcoming landmarks, and 3D Warp Gate rings:
 
-1. **Metropolis Kerwan (Solana Galaxy):** Ringed gas giant horizon, futuristic skyscrapers, and cruising hover-traffic.
-2. **Corson V — Nefarious City (Polaris):** Neon-magenta cyberpunk skyline, diagonal rain, and hovering air-taxis.
-3. **Planet Gaspar — Volcanic Core:** Molten magma basin with obsidian spires and erupting pyro-geysers.
-4. **Pokitaru — Jowai Resort Coast:** Sunlit azure ocean, sandy palm-tree islands, and leaping cyber-piranhas.
-5. **Torren IV — Molonoth Scrap Fields:** Rusted wasteland canyons with industrial scrap towers and crane gantries.
-6. **Megacorp Weapons Park (Bogon Galaxy):** Enclosed industrial foundry with overhead catwalks and shielded enforcers.
-7. **Zordoom Prison Maximum Security:** High-security galactic penitentiary with crimson lockdown grids.
+1. **Metropolis Kerwan (Solana Galaxy):** Ringed gas giant horizon, gleaming skyscrapers, and cruising hover-traffic.
+2. **Corson V — Nefarious City (Polaris):** Neon-magenta cyberpunk skyline, diagonal rain, and weaving hover-taxis.
+3. **Planet Gaspar — Volcanic Core:** Molten magma basin with obsidian spires and erupting lava geysers.
+4. **Pokitaru — Jowai Resort Coast:** Sunlit azure ocean, palm-tree islands, and leaping cyber-piranhas.
+5. **Torren IV — Molonoth Scrap Fields:** Rusted wasteland canyons with industrial scrap towers and swinging crane debris.
+6. **Megacorp Weapons Park (Bogon Galaxy):** Industrial weapons foundry with overhead catwalks and shielded Enforcers.
+7. **Zordoom Prison Maximum Security:** High-security galactic penitentiary with crimson lockdown laser grids.
 8. **Dimensionator Rift Anomaly:** Psionic violet dimensional tear with floating crystal obelisks and rift rings.
 
-### Boss Encounters (Every 750m)
+### Boss Dropships
 1. **Prog Twins // Command Warship:** Fires synchronized 2-lane plasma carpet-bombing volleys.
 2. **Emperor Nefarious // Dread-Frigate:** Sweeps dual Imperial ground lasers across the rails alongside rapid bolts.
 3. **Captain Slag // Sky-Galleon:** Space-pirate warship firing staggered 3-rail broadside cannon waves.
-4. **Bioliterator // Nefarious Dread-Mech:** Tracks Ratchet's lane, locks on with a crimson telegraph laser, and unleashes a 3-shot burst.
+4. **Bioliterator // Nefarious Dread-Mech:** Tracks your lane with a crimson telegraph laser and unleashes rapid 3-shot bursts.
+
+---
+
+## Audio, Presentation & Accessibility
+
+- **Soundtrack Jukebox:** 4 dynamic Insomniac-inspired chiptune/synth themes (*Rift Apart Main Theme*, *A Crack in Time*, *Going Commando - Tabora*, *Up Your Arsenal - Marcadia*).
+- **Crisp Native-Resolution 3D & UI:** Native display-resolution backbuffer with `4x MSAA` anti-aliasing, custom 32-bit `highp` OpenGL ES shaders on Android, and display-scaled `Roboto` typography.
+- **Accessibility & QOL:** Borderless native fullscreen (`F11 / Alt+Enter`), `0.29s` committed rail hops with input buffering, left-handed touch controls, configurable swipe sensitivity, focus-loss auto-pause, smooth `0.75s` unpause speed ramp, `Q`/`E` (`LB`/`RB`) tab cycling, and live `"!"` upgrade badges.
+
 ---
 
 ## Controls
@@ -97,11 +102,12 @@ Each run shuffles the order of all 8 sectors (seeded daily in Daily Challenge mo
 | Action | PC (Keyboard & Mouse) | Gamepad (Xbox / PS) | Android / Touch |
 | :--- | :--- | :--- | :--- |
 | **Switch Rail Left / Right** | `A` / `D` or `LEFT` / `RIGHT` | `D-Pad Left / Right` or `L-Stick` | Swipe Left / Right |
-| **Jump / Clank Heli-Glide** | `SPACE` / `W` / `UP` (Hold to glide) | `A` / `Cross` (Hold to glide) | `[JUMP / GLIDE]` Button or Swipe Up |
-| **Wrench Slide / Duck** | `S` / `DOWN` / `L-CTRL` | `B` / `Circle` or `L-Stick Down` | `[SLIDE]` Button or Swipe Down |
-| **Fire Equipped Weapon** | `Left Click` / `J` / `ENTER` | `RT` / `R2` or `X` / `Square` | `[FIRE]` Touch Button |
-| **Cycle Weapon (1 - 6)** | `1` - `6` / `Q` / `E` / `Wheel` | `LB` / `RB` (`L1` / `R1`) | Tap Weapon Hotbar |
-| **Pause Game** | `ESC` / `P` | `START` / `Options` | Top-Right `[II]` Touch Button |
+| **Jump / Clank Heli-Glide** | `SPACE` / `W` / `UP` (Hold to glide) | `A` / `Cross` (Hold to glide) | `[JUMP]` Button or Swipe Up |
+| **Wrench Slide / Duck** | `S` / `DOWN` / `L-CTRL` | `B` / `Circle` or `L-Stick Down` | Swipe Down |
+| **Fire / Swing Weapon** | `F` / `J` / `ENTER` / `Tap` | `RT` / `R2` or `X` / `Square` | `[FIRE]` Button or Tap |
+| **Overdrive Hoverboots** | `SHIFT` | `LT` / `L2` or `Y` / `Triangle` | `[BOOST]` Button |
+| **Select / Cycle Weapon** | `1` - `6` / `Q` / `E` / `Wheel` | `LB` / `RB` (`L1` / `R1`) | Tap Weapon Hotbar (`[1]`–`[6]`) |
+| **Pause Game** | `ESC` / `P` | `START` / `Options` | Top-Right `[II]` Button |
 | **Soundtrack Selector** | `N` (Next Track) / `M` (Mute) | Via Pause / Settings Menu | Via Settings Menu |
 | **Toggle Fullscreen** | `F11` or `ALT + ENTER` | — | Native Immersive Fullscreen |
 
@@ -109,11 +115,11 @@ Each run shuffles the order of all 8 sectors (seeded daily in Daily Challenge mo
 
 ## Technical Specifications
 
-- **Engine:** Raylib 5.0 with modern C++20 features.
-- **3D Camera System:** Custom third-person `Camera3D` tracking with rail curvature look-ahead, velocity-based roll tilt, and FOV dilation.
-- **Fixed-Timestep Physics:** `120 Hz` accumulator loop ensuring fluid, stutter-free movement on 60 Hz, 120 Hz, 144 Hz, and 240 Hz displays.
-- **Zero Runtime Heap Allocations:** All 3D track segments, bolts, hazards, particles, and weapon projectiles utilize pre-allocated static pools.
-- **Cross-Platform Parity:** Shared C++ codebase compiling natively to Windows 64-bit and Android `arm64-v8a` (OpenGL ES 2.0 / 3.0).
+- **Engine:** Raylib 5.0 with modern C++20.
+- **3D Camera System:** Custom third-person `Camera3D` tracking with rail curvature look-ahead, velocity-based roll tilt, and dynamic FOV warp.
+- **Fixed-Timestep Physics:** `120 Hz` accumulator loop ensuring deterministic, stutter-free motion across 60 Hz–240 Hz displays.
+- **Zero Runtime Heap Allocations:** All 3D track segments, bolts, hazards, particles, and weapon projectiles run on pre-allocated static pools.
+- **Cross-Platform Parity:** Single C++20 codebase compiling natively to Windows 64-bit and Android `arm64-v8a` (OpenGL ES 2.0 / 3.0).
 
 ---
 
@@ -132,4 +138,4 @@ Requires Android SDK + NDK (`r26b`+):
 ```cmd
 cmd.exe /c Build_Android_APK.bat
 ```
-Output: `RatchetAndClankRailfinity.apk` (aligned and signed with v2/v3 signatures, ready for direct USB sideloading).
+Output: `RatchetAndClankRailfinity.apk` (aligned and signed with v2/v3 signatures, ready for direct sideloading).
