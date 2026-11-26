@@ -25,12 +25,13 @@ Font LoadCrispUiFont(const std::initializer_list<const char*>& paths, int baseSi
     codepoints[count++] = 8226;
     codepoints[count++] = 8776;
     codepoints[count++] = 10003;
+    unsigned int defaultTexId = GetFontDefault().texture.id;
     for (const char* p : paths) {
 #if !defined(PLATFORM_ANDROID)
         if (!FileExists(p)) continue;
 #endif
         Font f = LoadFontEx(p, baseSize, codepoints, count);
-        if (f.texture.id != 0) {
+        if (f.texture.id != 0 && f.texture.id != defaultTexId) {
             SetTextureFilter(f.texture, TEXTURE_FILTER_BILINEAR);
             return f;
         }
@@ -100,10 +101,17 @@ void RailGame::RefreshUiFonts(float targetScale) {
     int pxBody  = std::clamp(static_cast<int>(std::round(20.0f * clampedScale)), 24, 128);
     int pxBold  = std::clamp(static_cast<int>(std::round(32.0f * clampedScale)), 36, 176);
     int pxHero  = std::clamp(static_cast<int>(std::round(66.0f * clampedScale)), 64, 256);
+#if defined(PLATFORM_ANDROID)
+    g_uiFontSmall = LoadCrispUiFont({ "ui_medium.ttf", "assets/ui_medium.ttf" }, pxSmall);
+    g_uiFontBody  = LoadCrispUiFont({ "ui_medium.ttf", "assets/ui_medium.ttf" }, pxBody);
+    g_uiFontBold  = LoadCrispUiFont({ "ui_bold.ttf", "assets/ui_bold.ttf" }, pxBold);
+    g_uiFontHero  = LoadCrispUiFont({ "ui_bold.ttf", "assets/ui_bold.ttf" }, pxHero);
+#else
     g_uiFontSmall = LoadCrispUiFont({ "assets/ui_medium.ttf", "ui_medium.ttf", "../assets/ui_medium.ttf", "build/assets/ui_medium.ttf" }, pxSmall);
     g_uiFontBody  = LoadCrispUiFont({ "assets/ui_medium.ttf", "ui_medium.ttf", "../assets/ui_medium.ttf", "build/assets/ui_medium.ttf" }, pxBody);
     g_uiFontBold  = LoadCrispUiFont({ "assets/ui_bold.ttf", "ui_bold.ttf", "../assets/ui_bold.ttf", "build/assets/ui_bold.ttf" }, pxBold);
     g_uiFontHero  = LoadCrispUiFont({ "assets/ui_bold.ttf", "ui_bold.ttf", "../assets/ui_bold.ttf", "build/assets/ui_bold.ttf" }, pxHero);
+#endif
 }
 
 void RailGame::InitUiFonts() {
@@ -111,10 +119,15 @@ void RailGame::InitUiFonts() {
 }
 
 void RailGame::ShutdownUiFonts() {
-    if (g_uiFontSmall.texture.id != 0) { UnloadFont(g_uiFontSmall); g_uiFontSmall = Font{}; }
-    if (g_uiFontBody.texture.id != 0)  { UnloadFont(g_uiFontBody);  g_uiFontBody  = Font{}; }
-    if (g_uiFontBold.texture.id != 0)  { UnloadFont(g_uiFontBold);  g_uiFontBold  = Font{}; }
-    if (g_uiFontHero.texture.id != 0)  { UnloadFont(g_uiFontHero);  g_uiFontHero  = Font{}; }
+    unsigned int defaultTexId = GetFontDefault().texture.id;
+    if (g_uiFontSmall.texture.id != 0 && g_uiFontSmall.texture.id != defaultTexId) { UnloadFont(g_uiFontSmall); }
+    if (g_uiFontBody.texture.id != 0  && g_uiFontBody.texture.id != defaultTexId)  { UnloadFont(g_uiFontBody);  }
+    if (g_uiFontBold.texture.id != 0  && g_uiFontBold.texture.id != defaultTexId)  { UnloadFont(g_uiFontBold);  }
+    if (g_uiFontHero.texture.id != 0  && g_uiFontHero.texture.id != defaultTexId)  { UnloadFont(g_uiFontHero);  }
+    g_uiFontSmall = Font{};
+    g_uiFontBody  = Font{};
+    g_uiFontBold  = Font{};
+    g_uiFontHero  = Font{};
     g_builtFontScale = 0.0f;
 }
 
