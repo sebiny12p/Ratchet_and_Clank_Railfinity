@@ -8,6 +8,21 @@ int main() {
 #else
     InitWindow(Railfinity::VIRTUAL_WIDTH, Railfinity::VIRTUAL_HEIGHT,
                "Ratchet & Clank: Railfinity | Sebiny Labs");
+    {
+        int mon = GetCurrentMonitor();
+        int mw = GetMonitorWidth(mon);
+        int mh = GetMonitorHeight(mon);
+        if (mw >= 1600 && mh >= 900) {
+            int winH = ((mh * 84) / 100) & ~1;
+            int winW = ((winH * 16) / 9) & ~1;
+            if (winW > (mw * 92) / 100) {
+                winW = ((mw * 88) / 100) & ~1;
+                winH = ((winW * 9) / 16) & ~1;
+            }
+            SetWindowSize(winW, winH);
+            SetWindowPosition((mw - winW) / 2, (mh - winH) / 2);
+        }
+    }
 #endif
     SetWindowMinSize(640, 360);
     SetExitKey(KEY_NULL); // Let ESC navigate menus & Pause screen

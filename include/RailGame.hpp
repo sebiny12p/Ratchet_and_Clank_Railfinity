@@ -90,6 +90,7 @@ private:
 
     // Rendering (implemented in RailRenderer3D.cpp)
     void InitUiFonts();
+    void RefreshUiFonts(float targetScale);
     void ShutdownUiFonts();
     void RenderFrame();
     void RenderWorld3D();
@@ -123,6 +124,9 @@ private:
 
 private:
     float virtualWidth_ = 1280.0f;
+    float uiScale_ = 1.0f;
+    float uiOffsetX_ = 0.0f;
+    float uiOffsetY_ = 0.0f;
     RenderTexture2D renderTarget_{};
     Camera3D camera_{};
     RailAudio audio_{};

@@ -9,17 +9,22 @@
 namespace Railfinity {
 
 namespace {
+Font g_uiFontSmall{};
 Font g_uiFontBody{};
 Font g_uiFontBold{};
+Font g_uiFontHero{};
+float g_builtFontScale = 0.0f;
+float g_activeUiScale = 1.0f;
 
 Font LoadCrispUiFont(const std::initializer_list<const char*>& paths, int baseSize) {
-    int codepoints[232];
+    int codepoints[236];
     int count = 0;
     for (int cp = 32; cp <= 255; ++cp) codepoints[count++] = cp;
     codepoints[count++] = 8211;
     codepoints[count++] = 8212;
     codepoints[count++] = 8226;
     codepoints[count++] = 8776;
+    codepoints[count++] = 10003;
     for (const char* p : paths) {
 #if !defined(PLATFORM_ANDROID)
         if (!FileExists(p)) continue;
@@ -33,9 +38,16 @@ Font LoadCrispUiFont(const std::initializer_list<const char*>& paths, int baseSi
     return Font{};
 }
 
+const Font& PickUiFont(int fontSize) {
+    if (fontSize <= 14) return (g_uiFontSmall.texture.id != 0) ? g_uiFontSmall : g_uiFontBody;
+    if (fontSize <= 19) return g_uiFontBody;
+    if (fontSize <= 34) return (g_uiFontBold.texture.id != 0) ? g_uiFontBold : g_uiFontBody;
+    return (g_uiFontHero.texture.id != 0) ? g_uiFontHero : g_uiFontBold;
+}
+
 int MeasureGameText(const char* text, int fontSize) {
     if (!text || !text[0]) return 0;
-    const Font& f = (fontSize >= 20) ? g_uiFontBold : g_uiFontBody;
+    const Font& f = PickUiFont(fontSize);
     if (f.texture.id == 0) return ::MeasureText(text, fontSize);
     float scaledFs = static_cast<float>(fontSize) * 1.10f;
     float spacing = std::max(0.5f, static_cast<float>(fontSize) * 0.03f);
@@ -45,17 +57,22 @@ int MeasureGameText(const char* text, int fontSize) {
 
 void DrawGameText(const char* text, int posX, int posY, int fontSize, Color color) {
     if (!text || !text[0]) return;
-    const Font& f = (fontSize >= 20) ? g_uiFontBold : g_uiFontBody;
+    const Font& f = PickUiFont(fontSize);
     if (f.texture.id == 0) {
         ::DrawText(text, posX, posY, fontSize, color);
         return;
     }
+    float sc = std::max(0.5f, g_activeUiScale);
     float scaledFs = static_cast<float>(fontSize) * 1.10f;
     float spacing = std::max(0.5f, static_cast<float>(fontSize) * 0.03f);
-    Vector2 pos = { static_cast<float>(posX), static_cast<float>(posY) - scaledFs * 0.06f };
+    Vector2 pos = {
+        std::round(static_cast<float>(posX) * sc) / sc,
+        std::round((static_cast<float>(posY) - scaledFs * 0.06f) * sc) / sc
+    };
     if (color.a > 40 && (static_cast<int>(color.r) + static_cast<int>(color.g) + static_cast<int>(color.b)) > 95) {
         unsigned char shA = static_cast<unsigned char>(std::min(220, static_cast<int>(color.a * 0.72f)));
-        DrawTextEx(f, text, { pos.x + 1.0f, pos.y + 1.0f }, scaledFs, spacing, { 0, 0, 0, shA });
+        float px1 = std::max(1.0f, std::round(sc * 0.85f)) / sc;
+        DrawTextEx(f, text, { pos.x + px1, pos.y + px1 }, scaledFs, spacing, { 0, 0, 0, shA });
     }
     DrawTextEx(f, text, pos, scaledFs, spacing, color);
 }
@@ -71,24 +88,34 @@ void DrawUpgradeBadge(Rectangle r, float globalTime) {
 }
 } // namespace
 
+void RailGame::RefreshUiFonts(float targetScale) {
+    float clampedScale = std::clamp(targetScale, 0.75f, 4.0f);
+    g_activeUiScale = clampedScale;
+    if (g_uiFontBody.texture.id != 0 && std::abs(clampedScale - g_builtFontScale) < 0.08f) {
+        return;
+    }
+    ShutdownUiFonts();
+    g_builtFontScale = clampedScale;
+    int pxSmall = std::clamp(static_cast<int>(std::round(15.0f * clampedScale)), 18, 96);
+    int pxBody  = std::clamp(static_cast<int>(std::round(20.0f * clampedScale)), 24, 128);
+    int pxBold  = std::clamp(static_cast<int>(std::round(32.0f * clampedScale)), 36, 176);
+    int pxHero  = std::clamp(static_cast<int>(std::round(66.0f * clampedScale)), 64, 256);
+    g_uiFontSmall = LoadCrispUiFont({ "assets/ui_medium.ttf", "ui_medium.ttf", "../assets/ui_medium.ttf", "build/assets/ui_medium.ttf" }, pxSmall);
+    g_uiFontBody  = LoadCrispUiFont({ "assets/ui_medium.ttf", "ui_medium.ttf", "../assets/ui_medium.ttf", "build/assets/ui_medium.ttf" }, pxBody);
+    g_uiFontBold  = LoadCrispUiFont({ "assets/ui_bold.ttf", "ui_bold.ttf", "../assets/ui_bold.ttf", "build/assets/ui_bold.ttf" }, pxBold);
+    g_uiFontHero  = LoadCrispUiFont({ "assets/ui_bold.ttf", "ui_bold.ttf", "../assets/ui_bold.ttf", "build/assets/ui_bold.ttf" }, pxHero);
+}
+
 void RailGame::InitUiFonts() {
-    if (g_uiFontBody.texture.id == 0) {
-        g_uiFontBody = LoadCrispUiFont({ "assets/ui_medium.ttf", "ui_medium.ttf", "../assets/ui_medium.ttf", "build/assets/ui_medium.ttf" }, 34);
-    }
-    if (g_uiFontBold.texture.id == 0) {
-        g_uiFontBold = LoadCrispUiFont({ "assets/ui_bold.ttf", "ui_bold.ttf", "../assets/ui_bold.ttf", "build/assets/ui_bold.ttf" }, 68);
-    }
+    RefreshUiFonts(uiScale_);
 }
 
 void RailGame::ShutdownUiFonts() {
-    if (g_uiFontBody.texture.id != 0) {
-        UnloadFont(g_uiFontBody);
-        g_uiFontBody = Font{};
-    }
-    if (g_uiFontBold.texture.id != 0) {
-        UnloadFont(g_uiFontBold);
-        g_uiFontBold = Font{};
-    }
+    if (g_uiFontSmall.texture.id != 0) { UnloadFont(g_uiFontSmall); g_uiFontSmall = Font{}; }
+    if (g_uiFontBody.texture.id != 0)  { UnloadFont(g_uiFontBody);  g_uiFontBody  = Font{}; }
+    if (g_uiFontBold.texture.id != 0)  { UnloadFont(g_uiFontBold);  g_uiFontBold  = Font{}; }
+    if (g_uiFontHero.texture.id != 0)  { UnloadFont(g_uiFontHero);  g_uiFontHero  = Font{}; }
+    g_builtFontScale = 0.0f;
 }
 
 #define MeasureText MeasureGameText
@@ -267,7 +294,7 @@ void DrawSectorSkyDecor(Railfinity::GalaxySector sec, float virtualWidth, float 
 void RailGame::RenderFrame() {
     UpdateVirtualResolution();
 
-    BeginTextureMode(renderTarget_);
+    BeginDrawing();
 
     bool inRun = (mode_ == ScreenMode::PLAYING || mode_ == ScreenMode::PAUSED || mode_ == ScreenMode::GAME_OVER);
     GalaxySector sec = inRun ? GetCurrentSector() : GalaxySector::METROPOLIS_KERWAN;
@@ -280,11 +307,18 @@ void RailGame::RenderFrame() {
     Color skyTop = LerpCol(palA.skyTop, palB.skyTop, blend);
     Color skyBot = LerpCol(palA.skyBot, palB.skyBot, blend);
 
-    // Crucial: ClearBackground clears both the color buffer AND the 3D Depth Buffer of renderTarget_!
+    // Crucial: ClearBackground clears both the native color buffer AND the native 3D Depth Buffer!
     rlEnableDepthMask();
     ClearBackground(skyTop);
 
+    Camera2D uiCam{};
+    uiCam.offset = { uiOffsetX_, uiOffsetY_ };
+    uiCam.target = { 0.0f, 0.0f };
+    uiCam.rotation = 0.0f;
+    uiCam.zoom = uiScale_;
+
     // Disable Depth Mask during 2D background gradient & skybox art so it does NOT write into the 3D depth buffer!
+    BeginMode2D(uiCam);
     rlDisableDepthMask();
     DrawRectangleGradientV(0, 0, static_cast<int>(virtualWidth_), 720, skyTop, skyBot);
     DrawSectorSkyDecor(sec, virtualWidth_, globalTime_, 1.0f - blend);
@@ -292,7 +326,11 @@ void RailGame::RenderFrame() {
         DrawSectorSkyDecor(nextSec, virtualWidth_, globalTime_, blend);
     }
     rlEnableDepthMask();
+    EndMode2D();
+
     RenderWorld3D();
+
+    BeginMode2D(uiCam);
 
     // Screen Flash
     if (screenFlashAlpha_ > 0.0f && save_.screenFlashes) {
@@ -334,15 +372,16 @@ void RailGame::RenderFrame() {
 
     RenderSkillToast2D();
 
-    EndTextureMode();
+    EndMode2D();
 
-    // Blit virtual 1280x720 canvas to window
-    BeginDrawing();
-    ClearBackground(BLACK);
-    Rectangle src = { 0.0f, 0.0f, static_cast<float>(renderTarget_.texture.width),
-                      -static_cast<float>(renderTarget_.texture.height) };
-    Rectangle dst = { 0.0f, 0.0f, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight()) };
-    DrawTexturePro(renderTarget_.texture, src, dst, { 0.0f, 0.0f }, 0.0f, WHITE);
+    if (uiOffsetY_ > 0.5f) {
+        int sw = GetScreenWidth();
+        int sh = GetScreenHeight();
+        int bar = static_cast<int>(std::ceil(uiOffsetY_));
+        DrawRectangle(0, 0, sw, bar, BLACK);
+        DrawRectangle(0, sh - bar, sw, bar + 2, BLACK);
+    }
+
     EndDrawing();
 }
 
@@ -2656,8 +2695,10 @@ void RailGame::RenderHud2D() {
         activeCam.position.x += std::sin(globalTime_ * 73.0f) * mag;
         activeCam.position.y += std::cos(globalTime_ * 61.0f) * mag;
     }
+    float rw = std::max(1.0f, static_cast<float>(GetRenderWidth()));
+    float rh = std::max(1.0f, static_cast<float>(GetRenderHeight()));
     Matrix matView = MatrixLookAt(activeCam.position, activeCam.target, activeCam.up);
-    Matrix matProj = MatrixPerspective(activeCam.fovy * DEG2RAD, static_cast<double>(virtualWidth_) / 720.0, 0.90, 220.0);
+    Matrix matProj = MatrixPerspective(activeCam.fovy * DEG2RAD, static_cast<double>(rw) / static_cast<double>(rh), 0.90, 220.0);
     auto ProjectToVirtual = [&](Vector3 worldPos, Vector2& outScr) -> bool {
         Quaternion wp = { worldPos.x, worldPos.y, worldPos.z, 1.0f };
         wp = QuaternionTransform(wp, matView);
@@ -2665,8 +2706,10 @@ void RailGame::RenderHud2D() {
         if (wp.w <= 0.1f) return false;
         float ndcX = wp.x / wp.w;
         float ndcY = -wp.y / wp.w;
-        outScr.x = (ndcX + 1.0f) * 0.5f * virtualWidth_;
-        outScr.y = (ndcY + 1.0f) * 0.5f * 720.0f;
+        float px = (ndcX + 1.0f) * 0.5f * rw;
+        float py = (ndcY + 1.0f) * 0.5f * rh;
+        outScr.x = (px - uiOffsetX_) / std::max(0.001f, uiScale_);
+        outScr.y = (py - uiOffsetY_) / std::max(0.001f, uiScale_);
         return (outScr.x >= -40.0f && outScr.x <= virtualWidth_ + 40.0f &&
                 outScr.y >= -40.0f && outScr.y <= 760.0f);
     };

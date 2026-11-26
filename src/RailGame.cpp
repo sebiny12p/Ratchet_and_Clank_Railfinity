@@ -132,23 +132,24 @@ bool RailGame::IsMutatorActive(DailyMutatorId mut) const {
 }
 
 void RailGame::UpdateVirtualResolution() {
-    float sw = static_cast<float>(GetScreenWidth());
-    float sh = static_cast<float>(GetScreenHeight());
-    if (sw > 0.0f && sh > 0.0f) {
-        float targetW = std::max(1280.0f, std::round(720.0f * (sw / sh)));
-        if (renderTarget_.id == 0 || std::abs(virtualWidth_ - targetW) > 1.0f) {
-            virtualWidth_ = targetW;
-            if (renderTarget_.id != 0) {
-                UnloadRenderTexture(renderTarget_);
-            }
-            renderTarget_ = LoadRenderTexture(static_cast<int>(virtualWidth_), 720);
-            SetTextureFilter(renderTarget_.texture, TEXTURE_FILTER_BILINEAR);
-        }
-    } else if (renderTarget_.id == 0) {
-        virtualWidth_ = 1280.0f;
-        renderTarget_ = LoadRenderTexture(1280, 720);
-        SetTextureFilter(renderTarget_.texture, TEXTURE_FILTER_BILINEAR);
+    float sw = static_cast<float>(GetRenderWidth());
+    float sh = static_cast<float>(GetRenderHeight());
+    if (sw <= 0.0f || sh <= 0.0f) {
+        sw = static_cast<float>(GetScreenWidth());
+        sh = static_cast<float>(GetScreenHeight());
     }
+    if (sw > 0.0f && sh > 0.0f) {
+        virtualWidth_ = std::max(1280.0f, std::round(720.0f * (sw / sh)));
+        uiScale_ = std::min(sw / virtualWidth_, sh / 720.0f);
+        uiOffsetX_ = (sw - virtualWidth_ * uiScale_) * 0.5f;
+        uiOffsetY_ = (sh - 720.0f * uiScale_) * 0.5f;
+    } else {
+        virtualWidth_ = 1280.0f;
+        uiScale_ = 1.0f;
+        uiOffsetX_ = 0.0f;
+        uiOffsetY_ = 0.0f;
+    }
+    RefreshUiFonts(uiScale_);
 }
 
 void RailGame::Init() {
@@ -858,8 +859,15 @@ Vector2 RailGame::GetVirtualMouse() const {
 Vector2 RailGame::ToVirtualCoords(Vector2 screenPos) const {
     float sw = static_cast<float>(GetScreenWidth());
     float sh = static_cast<float>(GetScreenHeight());
-    if (sw <= 0.0f || sh <= 0.0f) return { 0.0f, 0.0f };
-    return { screenPos.x * (virtualWidth_ / sw), screenPos.y * (720.0f / sh) };
+    float rw = static_cast<float>(GetRenderWidth());
+    float rh = static_cast<float>(GetRenderHeight());
+    if (sw <= 0.0f || sh <= 0.0f || uiScale_ <= 0.0f) return { 0.0f, 0.0f };
+    float rx = (rw > 0.0f) ? (screenPos.x * (rw / sw)) : screenPos.x;
+    float ry = (rh > 0.0f) ? (screenPos.y * (rh / sh)) : screenPos.y;
+    return {
+        (rx - uiOffsetX_) / uiScale_,
+        (ry - uiOffsetY_) / uiScale_
+    };
 }
 
 bool RailGame::IsRectHovered(Rectangle r) const {
@@ -1563,7 +1571,11 @@ void RailGame::HandleInput() {
     }
 
     if (IsKeyPressed(KEY_F11) || (IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_ENTER))) {
+#if !defined(PLATFORM_ANDROID)
+        ToggleBorderlessWindowed();
+#else
         ToggleFullscreen();
+#endif
     }
 
     if (IsGamepadAvailable(0)) {
