@@ -438,6 +438,9 @@ void RailGame::RenderWorld3D() {
         }
     }
 
+    if (ratchetHeadShaderLoaded_ && locHeadCamPos_ >= 0) {
+        SetShaderValue(ratchetHeadShader_, locHeadCamPos_, &cam.position.x, SHADER_UNIFORM_VEC3);
+    }
     if (worldHighpShaderLoaded_) {
         BeginShaderMode(worldHighpShader_);
     }
@@ -2030,39 +2033,117 @@ void RailGame::RenderLombaxHero3D(Vector3 pos, float tiltDeg, bool sliding, bool
             }
         }
 
-        // --- AUTHENTIC 3D MESH RATCHET/RIVET HEAD (PS3 A Crack in Time) ---
-        float mScale = 0.170f;
-        float rotDeg = (tiltDeg * 0.45f);
-        Matrix matScale = MatrixScale(mScale, mScale, mScale);
-        Matrix matRot   = MatrixRotateY(rotDeg * DEG2RAD);
-        Matrix matTrans = MatrixTranslate(neckTop.x, neckTop.y, neckTop.z);
-        Matrix matTransform = MatrixMultiply(MatrixMultiply(matScale, matRot), matTrans);
+        // --- AUTHENTIC 3D MESH RATCHET/RIVET HEAD WITH LIVE FACIAL ANIMATION ---
+        bool inGameplay = (mode_ == ScreenMode::PLAYING || mode_ == ScreenMode::PAUSED || mode_ == ScreenMode::GAME_OVER);
 
-        // Submesh Breakdown:
-        // 0: Head_Tail (Opaque head & ears)
-        // 1: Ear_Fur (Transparent fur cards)
-        // 2: Face_Tail_Fur (Transparent cheek fur cards)
-        // 3: Eyes (Opaque emerald-green eyes, sclera, irises, pupils)
-        // 4: Cap_Teeth (Opaque aviator cap rivets & stitching)
-        // 5: Eyebrow_Fur (Transparent arched eyebrows)
-        
-        // Pass 1: Solid Opaque Meshes with full Depth Write
-        int opaqueSubmeshes[] = { 0, 3, 4 };
-        for (int idx : opaqueSubmeshes) {
-            if (idx < ratchetModel_.meshCount) {
-                DrawMesh(ratchetModel_.meshes[idx], ratchetModel_.materials[ratchetModel_.meshMaterial[idx]], matTransform);
-            }
+        // 1. Natural Eyelid Blink Cycle (snappy 135ms blink every ~3.4s, with occasional natural double-blink!)
+        float blinkCycle = std::fmod(globalTime_, 10.2f);
+        auto evalBlinkPulse = [](float t, float center, float halfDur) -> float {
+            float d = std::abs(t - center);
+            if (d >= halfDur) return 0.0f;
+            float u = 1.0f - (d / halfDur);
+            return u * u * (3.0f - 2.0f * u);
+        };
+        float rawBlink = std::max({
+            evalBlinkPulse(blinkCycle, 1.85f, 0.075f),
+            evalBlinkPulse(blinkCycle, 5.35f, 0.075f),
+            evalBlinkPulse(blinkCycle, 8.55f, 0.070f),
+            evalBlinkPulse(blinkCycle, 8.80f, 0.070f) // Occasional natural double-blink!
+        });
+        // Subtle heroic relaxed upper-lid rest (0.08 idle, 0.18 focused squint when aiming/sliding) kills wide-eyed T-pose stare!
+        float restLid = (aimBlend > 0.2f || sliding) ? 0.18f : 0.08f;
+        float blinkAmount = std::clamp(restLid + rawBlink * (1.0f - restLid), 0.0f, 1.0f);
+
+        // 2. Snappy Eye Saccades (smooth 90ms darts between natural focal points instead of thousand-yard stare!)
+        static constexpr float SACCADE_X[8] = {  0.000f, -0.028f,  0.024f,  0.005f, -0.020f,  0.030f, -0.008f,  0.018f };
+        static constexpr float SACCADE_Y[8] = {  0.006f,  0.012f,  0.004f,  0.018f, -0.006f,  0.010f,  0.014f, -0.004f };
+        float sacTime = globalTime_ * 0.58f;
+        int sacIdx0 = static_cast<int>(std::floor(sacTime)) & 7;
+        int sacIdx1 = (sacIdx0 + 1) & 7;
+        float sacFrac = sacTime - std::floor(sacTime);
+        float sacBlend = std::clamp((sacFrac - 0.88f) / 0.12f, 0.0f, 1.0f);
+        sacBlend = sacBlend * sacBlend * (3.0f - 2.0f * sacBlend);
+        float eyeDx = Lerp(SACCADE_X[sacIdx0], SACCADE_X[sacIdx1], sacBlend);
+        float eyeDy = Lerp(SACCADE_Y[sacIdx0], SACCADE_Y[sacIdx1], sacBlend);
+        if (inGameplay) {
+            eyeDx = eyeDx * 0.45f + std::clamp(-tiltDeg * 0.0014f, -0.032f, 0.032f);
+            eyeDy = eyeDy * 0.45f + (gliding ? 0.014f : (sliding ? -0.010f : 0.006f));
         }
 
-        // Pass 2: Transparent Fur Cards with Depth Write Disabled (no dark halos, black cutouts, or depth holes!)
-        rlDisableDepthMask();
-        int transparentSubmeshes[] = { 1, 2, 5 };
-        for (int idx : transparentSubmeshes) {
-            if (idx < ratchetModel_.meshCount) {
-                DrawMesh(ratchetModel_.meshes[idx], ratchetModel_.materials[ratchetModel_.meshMaterial[idx]], matTransform);
+        // 3. Confident Lombax Smirk & Organic Head Turn / Tilt / Breathing Nod
+        float smirkAmount = (gliding || player_.hyperBoostTimer > 0.0f || player_.overdriveDuration > 0.0f)
+                          ? 0.92f
+                          : ((aimBlend > 0.3f) ? 0.42f : (0.68f + 0.10f * std::sin(globalTime_ * 1.7f)));
+
+        float idleYaw   = inGameplay ? 0.0f : (std::sin(globalTime_ * 1.15f) * 5.8f + eyeDx * 95.0f);
+        float idlePitch = inGameplay
+                        ? (sliding ? 8.0f : (gliding ? -7.5f : std::sin(globalTime_ * 4.2f) * 1.6f))
+                        : (-2.8f + std::sin(globalTime_ * 2.1f) * 2.2f - eyeDy * 65.0f);
+        float idleRoll  = inGameplay
+                        ? (-tiltDeg * 0.18f)
+                        : (std::sin(globalTime_ * 0.85f + 0.7f) * 2.8f);
+
+        float mScale = 0.170f;
+        float rotDeg = (tiltDeg * 0.45f) + idleYaw;
+        Matrix matScale = MatrixScale(mScale, mScale, mScale);
+        Matrix matPitch = MatrixRotateX(idlePitch * DEG2RAD);
+        Matrix matRoll  = MatrixRotateZ(idleRoll * DEG2RAD);
+        Matrix matRotY  = MatrixRotateY(rotDeg * DEG2RAD);
+        Matrix matHeadRot = MatrixMultiply(MatrixMultiply(matPitch, matRoll), matRotY);
+        Matrix matTrans = MatrixTranslate(neckTop.x, neckTop.y, neckTop.z);
+        Matrix matTransform = MatrixMultiply(MatrixMultiply(matScale, matHeadRot), matTrans);
+
+        // Expressive Eyebrow Submesh Transform (subtle asymmetric Lombax arch + reactive lift/furrow!)
+        float browLiftY = (gliding ? 0.045f : (aimBlend > 0.25f ? -0.028f : (0.018f + 0.014f * std::sin(globalTime_ * 1.6f))))
+                        - rawBlink * 0.035f;
+        float browRollDeg = (aimBlend > 0.25f) ? -2.2f : (2.4f + std::sin(globalTime_ * 1.1f) * 1.1f);
+        Matrix matBrowLocal = MatrixMultiply(MatrixRotateZ(browRollDeg * DEG2RAD), MatrixTranslate(0.0f, browLiftY, 0.0f));
+        Matrix matBrowTransform = MatrixMultiply(MatrixMultiply(MatrixMultiply(matBrowLocal, matScale), matHeadRot), matTrans);
+
+        float isRivetFlag = isRivet ? 1.0f : 0.0f;
+        if (ratchetHeadShaderLoaded_) {
+            float eyeShiftVec[2] = { eyeDx, eyeDy };
+            if (locEyeShift_ >= 0) {
+                SetShaderValue(ratchetHeadShader_, locEyeShift_, eyeShiftVec, SHADER_UNIFORM_VEC2);
             }
+        }
+        auto setHeadPassUniform = [&](float isEyePass) {
+            if (ratchetHeadShaderLoaded_ && locFaceParams_ >= 0) {
+                float fp[4] = { isEyePass, blinkAmount, smirkAmount, isRivetFlag };
+                SetShaderValue(ratchetHeadShader_, locFaceParams_, fp, SHADER_UNIFORM_VEC4);
+            }
+        };
+
+        // Pass 1: Solid Opaque Meshes with full Depth Write (0: Head_Tail, 3: Eyes, 4: Cap_Teeth)
+        setHeadPassUniform(0.0f);
+        if (0 < ratchetModel_.meshCount) {
+            DrawMesh(ratchetModel_.meshes[0], ratchetModel_.materials[ratchetModel_.meshMaterial[0]], matTransform);
+        }
+        if (4 < ratchetModel_.meshCount) {
+            DrawMesh(ratchetModel_.meshes[4], ratchetModel_.materials[ratchetModel_.meshMaterial[4]], matTransform);
+        }
+        if (3 < ratchetModel_.meshCount) {
+            setHeadPassUniform(1.0f);
+            DrawMesh(ratchetModel_.meshes[3], ratchetModel_.materials[ratchetModel_.meshMaterial[3]], matTransform);
+            setHeadPassUniform(0.0f);
+        }
+
+        // Pass 2: Transparent Fur Cards with Depth Write Disabled (1: Ear_Fur, 2: Face_Tail_Fur, 5: Eyebrow_Fur)
+        rlDisableDepthMask();
+        if (1 < ratchetModel_.meshCount) {
+            DrawMesh(ratchetModel_.meshes[1], ratchetModel_.materials[ratchetModel_.meshMaterial[1]], matTransform);
+        }
+        if (2 < ratchetModel_.meshCount) {
+            DrawMesh(ratchetModel_.meshes[2], ratchetModel_.materials[ratchetModel_.meshMaterial[2]], matTransform);
+        }
+        if (5 < ratchetModel_.meshCount) {
+            DrawMesh(ratchetModel_.meshes[5], ratchetModel_.materials[ratchetModel_.meshMaterial[5]], matBrowTransform);
         }
         rlEnableDepthMask();
+
+        if (worldHighpShaderLoaded_) {
+            BeginShaderMode(worldHighpShader_);
+        }
     } else {
         Color furCream   = { 246, 230, 198, 255 }; // Light cream muzzle fur
         Color noseBlack  = { 24, 20, 26, 255 };    // Dark leather nose button

@@ -216,6 +216,11 @@ private:
     std::vector<Texture2D> defaultModelTextures_{};
     Shader worldHighpShader_{};
     bool worldHighpShaderLoaded_ = false;
+    Shader ratchetHeadShader_{};
+    bool ratchetHeadShaderLoaded_ = false;
+    int locFaceParams_ = -1;
+    int locEyeShift_ = -1;
+    int locHeadCamPos_ = -1;
 
     PlayerLombax player_{};
     BossDropship boss_{};

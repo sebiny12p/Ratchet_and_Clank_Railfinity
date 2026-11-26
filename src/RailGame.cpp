@@ -274,6 +274,243 @@ void RailGame::Init() {
     rivetFur2_      = TryLoadTex({ "assets/models/ratchet/RivetFur2.png",      "models/ratchet/RivetFur2.png",      "../assets/models/ratchet/RivetFur2.png" });
     rivetEyeDiff_   = TryLoadTex({ "assets/models/ratchet/RivetEyeDiff.png",   "models/ratchet/RivetEyeDiff.png",   "../assets/models/ratchet/RivetEyeDiff.png" });
     rivetTexturesLoaded_ = (rivetHeadDiff_.id != 0);
+    if (ratchetEyeDiff_.id != 0) SetTextureWrap(ratchetEyeDiff_, TEXTURE_WRAP_CLAMP);
+    if (rivetEyeDiff_.id != 0)   SetTextureWrap(rivetEyeDiff_, TEXTURE_WRAP_CLAMP);
+
+    // Cross-platform expressive Lombax Head & Eye Shader (3-point soft lighting, smirk morph,
+    // iris saccades, subsurface iris glow, glossy corneal catchlights & natural eyelid blinking!)
+#if defined(PLATFORM_ANDROID)
+    const char* vHeadSrc =
+        "#version 100\n"
+        "precision highp float;\n"
+        "attribute highp vec3 vertexPosition;\n"
+        "attribute mediump vec2 vertexTexCoord;\n"
+        "attribute mediump vec3 vertexNormal;\n"
+        "attribute mediump vec4 vertexColor;\n"
+        "uniform highp mat4 mvp;\n"
+        "uniform highp mat4 matModel;\n"
+        "uniform highp mat4 matNormal;\n"
+        "uniform mediump vec4 uFaceParams;\n"
+        "varying mediump vec2 fragTexCoord;\n"
+        "varying mediump vec4 fragColor;\n"
+        "varying highp vec3 vLocalPos;\n"
+        "varying highp vec3 vWorldPos;\n"
+        "varying mediump vec3 vWorldNorm;\n"
+        "void main()\n"
+        "{\n"
+        "    vec3 pos = vertexPosition;\n"
+        "    if (uFaceParams.x < 0.5 && uFaceParams.z > 0.01) {\n"
+        "        float ax = abs(pos.x);\n"
+        "        float wx = exp(-pow((ax - 0.44) / 0.22, 2.0));\n"
+        "        float wy = exp(-pow((pos.y - 0.68) / 0.24, 2.0));\n"
+        "        float wz = smoothstep(0.72, 1.05, pos.z);\n"
+        "        float asym = (pos.x > 0.0) ? 1.08 : 0.68;\n"
+        "        float lift = wx * wy * wz * uFaceParams.z * asym;\n"
+        "        pos.y += lift * 0.095;\n"
+        "        pos.x += sign(pos.x) * lift * 0.025;\n"
+        "    }\n"
+        "    vLocalPos = vertexPosition;\n"
+        "    vWorldPos = (matModel * vec4(pos, 1.0)).xyz;\n"
+        "    vWorldNorm = normalize((matNormal * vec4(vertexNormal, 0.0)).xyz);\n"
+        "    fragTexCoord = vertexTexCoord;\n"
+        "    fragColor = vertexColor;\n"
+        "    gl_Position = mvp * vec4(pos, 1.0);\n"
+        "}\n";
+    const char* fHeadSrc =
+        "#version 100\n"
+        "precision highp float;\n"
+        "varying mediump vec2 fragTexCoord;\n"
+        "varying mediump vec4 fragColor;\n"
+        "varying highp vec3 vLocalPos;\n"
+        "varying highp vec3 vWorldPos;\n"
+        "varying mediump vec3 vWorldNorm;\n"
+        "uniform sampler2D texture0;\n"
+        "uniform mediump vec4 colDiffuse;\n"
+        "uniform mediump vec4 uFaceParams;\n"
+        "uniform mediump vec2 uEyeShift;\n"
+        "uniform highp vec3 uCamPos;\n"
+        "void main()\n"
+        "{\n"
+        "    vec3 N = normalize(vWorldNorm);\n"
+        "    vec3 V = normalize(uCamPos - vWorldPos);\n"
+        "    vec3 side = normalize(cross(vec3(0.0, 1.0, 0.0), V) + vec3(0.001, 0.0, 0.0));\n"
+        "    vec3 L = normalize(V + vec3(0.0, 0.72, 0.0) - side * 0.45);\n"
+        "    float ndl = dot(N, L) * 0.5 + 0.5;\n"
+        "    float hemi = N.y * 0.5 + 0.5;\n"
+        "    if (uFaceParams.x > 0.5) {\n"
+        "        vec2 uv = fragTexCoord;\n"
+        "        if (uv.x > 0.34 && uv.y > 0.37) {\n"
+        "            float dirSign = (vLocalPos.x < 0.0) ? 1.0 : -1.0;\n"
+        "            uv.x = clamp(uv.x - uEyeShift.x * dirSign, 0.35, 0.99);\n"
+        "            uv.y = clamp(uv.y - uEyeShift.y, 0.38, 0.99);\n"
+        "        }\n"
+        "        vec4 eyeTex = texture2D(texture0, uv);\n"
+        "        vec3 col = eyeTex.rgb;\n"
+        "        bool isIris = (uv.x > 0.35 && uv.y > 0.38 && eyeTex.r < 0.75);\n"
+        "        if (isIris) {\n"
+        "            float caustic = smoothstep(1.62, 1.32, vLocalPos.y) * smoothstep(0.04, 0.24, eyeTex.g + eyeTex.b);\n"
+        "            vec3 glowTint = (uFaceParams.w > 0.5) ? vec3(0.22, 0.82, 1.0) : vec3(0.34, 0.96, 0.26);\n"
+        "            col = col * 1.22 + glowTint * (caustic * 0.42);\n"
+        "        } else {\n"
+        "            col *= mix(0.84, 1.04, ndl);\n"
+        "        }\n"
+        "        float eyeCx = (vLocalPos.x < 0.0) ? -0.443 : 0.443;\n"
+        "        vec2 g1 = vec2(vLocalPos.x - (eyeCx - 0.115), vLocalPos.y - 1.635);\n"
+        "        vec2 g2 = vec2(vLocalPos.x - (eyeCx + 0.100), vLocalPos.y - 1.435);\n"
+        "        float catch1 = (1.0 - smoothstep(0.042, 0.072, length(g1))) * smoothstep(0.70, 0.80, vLocalPos.z);\n"
+        "        float catch2 = (1.0 - smoothstep(0.020, 0.040, length(g2))) * smoothstep(0.70, 0.80, vLocalPos.z);\n"
+        "        vec3 H = normalize(L + V);\n"
+        "        float spec = pow(max(dot(N, H), 0.0), 40.0) * 0.38;\n"
+        "        col = min(vec3(1.0), col + vec3(catch1 * 0.95 + catch2 * 0.72 + spec));\n"
+        "        float xNorm = clamp((abs(vLocalPos.x) - 0.443) / 0.42, -1.0, 1.0);\n"
+        "        float arch = 0.075 * (1.0 - xNorm * xNorm);\n"
+        "        float blink = clamp(uFaceParams.y, 0.0, 1.0);\n"
+        "        float upperLidY = mix(1.775 + arch, 1.16, blink);\n"
+        "        float lowerLidY = mix(1.03, 1.20, blink);\n"
+        "        float upperAO = smoothstep(upperLidY - 0.11, upperLidY, vLocalPos.y);\n"
+        "        col *= (1.0 - upperAO * 0.34);\n"
+        "        float lidMask = max(smoothstep(upperLidY - 0.022, upperLidY + 0.016, vLocalPos.y),\n"
+        "                            smoothstep(lowerLidY + 0.020, lowerLidY - 0.015, vLocalPos.y));\n"
+        "        if (lidMask > 0.005) {\n"
+        "            vec3 skinBase = (uFaceParams.w > 0.5) ? vec3(0.76, 0.73, 0.84) : vec3(0.74, 0.54, 0.09);\n"
+        "            vec3 lashCol  = (uFaceParams.w > 0.5) ? vec3(0.24, 0.03, 0.38) : vec3(0.22, 0.08, 0.01);\n"
+        "            float lashBand = 1.0 - smoothstep(0.0, 0.048, abs(vLocalPos.y - upperLidY));\n"
+        "            vec3 lidLit = mix(skinBase * mix(0.76, 1.12, ndl), lashCol, lashBand * 0.85);\n"
+        "            col = mix(col, lidLit, lidMask);\n"
+        "        }\n"
+        "        gl_FragColor = vec4(col, 1.0) * colDiffuse * fragColor;\n"
+        "        return;\n"
+        "    }\n"
+        "    vec4 texelColor = texture2D(texture0, fragTexCoord);\n"
+        "    if (texelColor.a < 0.05) discard;\n"
+        "    vec3 shade = mix(vec3(0.76, 0.72, 0.80), vec3(1.15, 1.11, 1.04), ndl * 0.65 + hemi * 0.35);\n"
+        "    float rim = pow(1.0 - max(dot(N, V), 0.0), 2.8) * 0.16;\n"
+        "    vec3 rimCol = (uFaceParams.w > 0.5) ? vec3(0.55, 0.80, 1.0) : vec3(1.0, 0.82, 0.42);\n"
+        "    vec3 litRgb = texelColor.rgb * shade + rimCol * rim;\n"
+        "    gl_FragColor = vec4(litRgb, texelColor.a) * colDiffuse * fragColor;\n"
+        "}\n";
+#else
+    const char* vHeadSrc =
+        "#version 330\n"
+        "in vec3 vertexPosition;\n"
+        "in vec2 vertexTexCoord;\n"
+        "in vec3 vertexNormal;\n"
+        "in vec4 vertexColor;\n"
+        "uniform mat4 mvp;\n"
+        "uniform mat4 matModel;\n"
+        "uniform mat4 matNormal;\n"
+        "uniform vec4 uFaceParams;\n"
+        "out vec2 fragTexCoord;\n"
+        "out vec4 fragColor;\n"
+        "out vec3 vLocalPos;\n"
+        "out vec3 vWorldPos;\n"
+        "out vec3 vWorldNorm;\n"
+        "void main()\n"
+        "{\n"
+        "    vec3 pos = vertexPosition;\n"
+        "    if (uFaceParams.x < 0.5 && uFaceParams.z > 0.01) {\n"
+        "        float ax = abs(pos.x);\n"
+        "        float wx = exp(-pow((ax - 0.44) / 0.22, 2.0));\n"
+        "        float wy = exp(-pow((pos.y - 0.68) / 0.24, 2.0));\n"
+        "        float wz = smoothstep(0.72, 1.05, pos.z);\n"
+        "        float asym = (pos.x > 0.0) ? 1.08 : 0.68;\n"
+        "        float lift = wx * wy * wz * uFaceParams.z * asym;\n"
+        "        pos.y += lift * 0.095;\n"
+        "        pos.x += sign(pos.x) * lift * 0.025;\n"
+        "    }\n"
+        "    vLocalPos = vertexPosition;\n"
+        "    vWorldPos = (matModel * vec4(pos, 1.0)).xyz;\n"
+        "    vWorldNorm = normalize((matNormal * vec4(vertexNormal, 0.0)).xyz);\n"
+        "    fragTexCoord = vertexTexCoord;\n"
+        "    fragColor = vertexColor;\n"
+        "    gl_Position = mvp * vec4(pos, 1.0);\n"
+        "}\n";
+    const char* fHeadSrc =
+        "#version 330\n"
+        "in vec2 fragTexCoord;\n"
+        "in vec4 fragColor;\n"
+        "in vec3 vLocalPos;\n"
+        "in vec3 vWorldPos;\n"
+        "in vec3 vWorldNorm;\n"
+        "uniform sampler2D texture0;\n"
+        "uniform vec4 colDiffuse;\n"
+        "uniform vec4 uFaceParams;\n"
+        "uniform vec2 uEyeShift;\n"
+        "uniform vec3 uCamPos;\n"
+        "out vec4 finalColor;\n"
+        "void main()\n"
+        "{\n"
+        "    vec3 N = normalize(vWorldNorm);\n"
+        "    vec3 V = normalize(uCamPos - vWorldPos);\n"
+        "    vec3 side = normalize(cross(vec3(0.0, 1.0, 0.0), V) + vec3(0.001, 0.0, 0.0));\n"
+        "    vec3 L = normalize(V + vec3(0.0, 0.72, 0.0) - side * 0.45);\n"
+        "    float ndl = dot(N, L) * 0.5 + 0.5;\n"
+        "    float hemi = N.y * 0.5 + 0.5;\n"
+        "    if (uFaceParams.x > 0.5) {\n"
+        "        vec2 uv = fragTexCoord;\n"
+        "        if (uv.x > 0.34 && uv.y > 0.37) {\n"
+        "            float dirSign = (vLocalPos.x < 0.0) ? 1.0 : -1.0;\n"
+        "            uv.x = clamp(uv.x - uEyeShift.x * dirSign, 0.35, 0.99);\n"
+        "            uv.y = clamp(uv.y - uEyeShift.y, 0.38, 0.99);\n"
+        "        }\n"
+        "        vec4 eyeTex = texture2D(texture0, uv);\n"
+        "        vec3 col = eyeTex.rgb;\n"
+        "        bool isIris = (uv.x > 0.35 && uv.y > 0.38 && eyeTex.r < 0.75);\n"
+        "        if (isIris) {\n"
+        "            float caustic = smoothstep(1.62, 1.32, vLocalPos.y) * smoothstep(0.04, 0.24, eyeTex.g + eyeTex.b);\n"
+        "            vec3 glowTint = (uFaceParams.w > 0.5) ? vec3(0.22, 0.82, 1.0) : vec3(0.34, 0.96, 0.26);\n"
+        "            col = col * 1.22 + glowTint * (caustic * 0.42);\n"
+        "        } else {\n"
+        "            col *= mix(0.84, 1.04, ndl);\n"
+        "        }\n"
+        "        float eyeCx = (vLocalPos.x < 0.0) ? -0.443 : 0.443;\n"
+        "        vec2 g1 = vec2(vLocalPos.x - (eyeCx - 0.115), vLocalPos.y - 1.635);\n"
+        "        vec2 g2 = vec2(vLocalPos.x - (eyeCx + 0.100), vLocalPos.y - 1.435);\n"
+        "        float catch1 = (1.0 - smoothstep(0.042, 0.072, length(g1))) * smoothstep(0.70, 0.80, vLocalPos.z);\n"
+        "        float catch2 = (1.0 - smoothstep(0.020, 0.040, length(g2))) * smoothstep(0.70, 0.80, vLocalPos.z);\n"
+        "        vec3 H = normalize(L + V);\n"
+        "        float spec = pow(max(dot(N, H), 0.0), 40.0) * 0.38;\n"
+        "        col = min(vec3(1.0), col + vec3(catch1 * 0.95 + catch2 * 0.72 + spec));\n"
+        "        float xNorm = clamp((abs(vLocalPos.x) - 0.443) / 0.42, -1.0, 1.0);\n"
+        "        float arch = 0.075 * (1.0 - xNorm * xNorm);\n"
+        "        float blink = clamp(uFaceParams.y, 0.0, 1.0);\n"
+        "        float upperLidY = mix(1.775 + arch, 1.16, blink);\n"
+        "        float lowerLidY = mix(1.03, 1.20, blink);\n"
+        "        float upperAO = smoothstep(upperLidY - 0.11, upperLidY, vLocalPos.y);\n"
+        "        col *= (1.0 - upperAO * 0.34);\n"
+        "        float lidMask = max(smoothstep(upperLidY - 0.022, upperLidY + 0.016, vLocalPos.y),\n"
+        "                            smoothstep(lowerLidY + 0.020, lowerLidY - 0.015, vLocalPos.y));\n"
+        "        if (lidMask > 0.005) {\n"
+        "            vec3 skinBase = (uFaceParams.w > 0.5) ? vec3(0.76, 0.73, 0.84) : vec3(0.74, 0.54, 0.09);\n"
+        "            vec3 lashCol  = (uFaceParams.w > 0.5) ? vec3(0.24, 0.03, 0.38) : vec3(0.22, 0.08, 0.01);\n"
+        "            float lashBand = 1.0 - smoothstep(0.0, 0.048, abs(vLocalPos.y - upperLidY));\n"
+        "            vec3 lidLit = mix(skinBase * mix(0.76, 1.12, ndl), lashCol, lashBand * 0.85);\n"
+        "            col = mix(col, lidLit, lidMask);\n"
+        "        }\n"
+        "        finalColor = vec4(col, 1.0) * colDiffuse * fragColor;\n"
+        "        return;\n"
+        "    }\n"
+        "    vec4 texelColor = texture2D(texture0, fragTexCoord);\n"
+        "    if (texelColor.a < 0.05) discard;\n"
+        "    vec3 shade = mix(vec3(0.76, 0.72, 0.80), vec3(1.15, 1.11, 1.04), ndl * 0.65 + hemi * 0.35);\n"
+        "    float rim = pow(1.0 - max(dot(N, V), 0.0), 2.8) * 0.16;\n"
+        "    vec3 rimCol = (uFaceParams.w > 0.5) ? vec3(0.55, 0.80, 1.0) : vec3(1.0, 0.82, 0.42);\n"
+        "    vec3 litRgb = texelColor.rgb * shade + rimCol * rim;\n"
+        "    finalColor = vec4(litRgb, texelColor.a) * colDiffuse * fragColor;\n"
+        "}\n";
+#endif
+    ratchetHeadShader_ = LoadShaderFromMemory(vHeadSrc, fHeadSrc);
+    if (ratchetHeadShader_.id != 0) {
+        ratchetHeadShaderLoaded_ = true;
+        locFaceParams_ = GetShaderLocation(ratchetHeadShader_, "uFaceParams");
+        locEyeShift_   = GetShaderLocation(ratchetHeadShader_, "uEyeShift");
+        locHeadCamPos_ = GetShaderLocation(ratchetHeadShader_, "uCamPos");
+        if (ratchetModelLoaded_) {
+            for (int i = 0; i < ratchetModel_.materialCount; ++i) {
+                ratchetModel_.materials[i].shader = ratchetHeadShader_;
+            }
+        }
+    }
 
 #if defined(PLATFORM_ANDROID)
     // OpenGL ES 2.0 default Raylib shader uses mediump float (10-bit half-float), causing severe vertex
@@ -309,7 +546,7 @@ void RailGame::Init() {
     worldHighpShader_ = LoadShaderFromMemory(vHighp, fMedp);
     if (worldHighpShader_.id != 0) {
         worldHighpShaderLoaded_ = true;
-        if (ratchetModelLoaded_) {
+        if (ratchetModelLoaded_ && !ratchetHeadShaderLoaded_) {
             for (int i = 0; i < ratchetModel_.materialCount; ++i) {
                 ratchetModel_.materials[i].shader = worldHighpShader_;
             }
@@ -335,9 +572,14 @@ void RailGame::Shutdown() {
     if (ratchetModelLoaded_) {
         for (int m = 0; m < ratchetModel_.materialCount; ++m) {
             ratchetModel_.materials[m].maps[MATERIAL_MAP_DIFFUSE].texture = Texture2D{};
+            ratchetModel_.materials[m].shader = Shader{};
         }
         UnloadModel(ratchetModel_);
         ratchetModelLoaded_ = false;
+    }
+    if (ratchetHeadShaderLoaded_) {
+        UnloadShader(ratchetHeadShader_);
+        ratchetHeadShaderLoaded_ = false;
     }
     if (worldHighpShaderLoaded_) {
         UnloadShader(worldHighpShader_);
