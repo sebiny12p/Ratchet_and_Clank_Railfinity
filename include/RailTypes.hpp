@@ -22,6 +22,8 @@ constexpr size_t NUM_WEAPONS = 6;
 constexpr size_t NUM_SKILL_POINTS = 10;
 constexpr size_t NUM_ARMOR_SUITS = 6;
 constexpr size_t NUM_CLANK_SKINS = 5;
+constexpr size_t NUM_DAILY_CONTRACTS = 3;
+constexpr size_t NUM_DAILY_MUTATORS = 8;
 
 enum class ScreenMode {
     SPLASH_INTRO,     // Sebiny Labs Logo Flash Intro
@@ -30,12 +32,40 @@ enum class ScreenMode {
     GADGETRON_VENDOR,
     RARITANIUM_LAB,
     ARMOR_WARDROBE,   // 3D Interactive Lombax & Clank Armor Wardrobe
+    BOUNTIES_VIEW,    // Daily Dreadzone / Gadgetron Contracts
     SKILL_POINTS_VIEW,
     SETTINGS_VIEW,
     STATS_VIEW,       // Galactic Career Dossier & Lifetime Telemetry
     PLAYING,
     PAUSED,
     GAME_OVER
+};
+
+enum class DailyMutatorId : int {
+    ARMORED_CONVOY = 0,     // More Enforcers/Drones | 2x Wrench & Combuster dmg + extra Crate Ammo
+    HIGH_VOLTAGE_GRID = 1,  // More Electrified Rails & Lasers | Cross-lane Bolt/Rari Magnet
+    VOLATILE_CARGO = 2,     // Extra TNT Barrels | 3-Lane TNT chain blasts & 2x Crate Bolts
+    OVERCLOCKED_RAILS = 3,  // +12% Rail Speed & more Boost Pads | 1.6x faster Multiplier climb
+    AERIAL_ASSAULT = 4,     // More Chasms & Low Lasers | 2x Heli-Pack fuel + mid-air trickle recharge
+    GADGETRON_OVERLOAD = 5, // +35% Boss Armor | +30% Weapon Fire Rate & +50% Max Firearm Ammo
+    RARITANIUM_RUSH = 6,    // Cross-sector wildlife/traffic hazards | Extra cyan Raritanium Caches
+    DEADLOCKED_GAUNTLET = 7 // Bosses ambush every 500m | Boss kills heal +2 HP & +3 extra Raritanium
+};
+
+struct DailyMutatorDef {
+    DailyMutatorId id;
+    const char* name;
+    const char* hazardDesc;
+    const char* perkDesc;
+};
+
+struct DailyContractDef {
+    int id;
+    const char* title;
+    const char* description;
+    int targetCount;
+    int boltReward;
+    int rariReward;
 };
 
 enum class WeaponId : int {
@@ -130,6 +160,20 @@ struct RadioCommMessage {
     std::string text;
     float timer = 0.0f;
     float maxTimer = 4.5f;
+};
+
+struct LiveRadioDare {
+    bool active = false;
+    int dareType = 0;       // 0..6 varied tactical dares
+    CommSpeaker speaker = CommSpeaker::CAPTAIN_QWARK;
+    std::string speakerName;
+    std::string title;
+    std::string prompt;
+    float timer = 0.0f;
+    float maxTimer = 18.0f;
+    int progress = 0;
+    int target = 5;
+    float startDistance = 0.0f;
 };
 
 enum class ArmorSuitId : int {
@@ -340,6 +384,14 @@ struct SaveData {
     int totalRaritaniumEarnedLifetime = 0;
     int totalSwingshotGrapples = 0;
     int totalOverdriveBoosts = 0;
+
+    // Persisted Daily Contracts & Telemetry (appended backward-compatibly)
+    int dailyContractDateKey = 0;
+    std::array<int, NUM_DAILY_CONTRACTS> dailyContractIds = { 0, 1, 2 };
+    std::array<int, NUM_DAILY_CONTRACTS> dailyContractProg = { 0, 0, 0 };
+    std::array<bool, NUM_DAILY_CONTRACTS> dailyContractDone = { false, false, false };
+    int totalContractsCompleted = 0;
+    int totalRadioDaresCompleted = 0;
 };
 
 struct PlayerLombax {

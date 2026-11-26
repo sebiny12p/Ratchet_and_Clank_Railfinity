@@ -55,6 +55,49 @@ const std::array<SkillPointDef, NUM_SKILL_POINTS> SKILL_POINT_CATALOG = {{
     { 8, "RARITANIUM MINER", "Harvest a crystalline Raritanium Cache on the rails.", 400 },
     { 9, "LOCKED AND LOADED", "Unlock at least 3 different Gadgetron weapons.", 700 }
 }};
+
+const std::array<DailyMutatorDef, NUM_DAILY_MUTATORS> MUTATOR_CATALOG = {{
+    { DailyMutatorId::ARMORED_CONVOY, "ARMORED CONVOY",
+      "HAZARD: Heavy Thug Drone & Shielded Enforcer patrols on the rails.",
+      "PERK: 2x OmniWrench & Combuster Damage + +50% Crate Ammo Restock." },
+    { DailyMutatorId::HIGH_VOLTAGE_GRID, "HIGH-VOLTAGE GRID",
+      "HAZARD: Dense Electrified Rail coils & security Laser Gates.",
+      "PERK: Cross-Rail Attractor pulls Bolts & Raritanium from adjacent lanes." },
+    { DailyMutatorId::VOLATILE_CARGO, "VOLATILE CARGO",
+      "HAZARD: Unstable Megacorp TNT Barrels scattered across corridors.",
+      "PERK: TNT blasts chain 16m across all 3 rails & double Crate Bolt drops." },
+    { DailyMutatorId::OVERCLOCKED_RAILS, "OVERCLOCKED RAILS",
+      "HAZARD: +12% Overclocked Grind Speed & frequent Hyper-Boost ramps.",
+      "PERK: Bolt Multiplier escalates 1.6x faster toward 20x." },
+    { DailyMutatorId::AERIAL_ASSAULT, "AERIAL ASSAULT",
+      "HAZARD: Frequent Low Laser curtains & high-altitude rail jumps.",
+      "PERK: 2x Clank Heli-Pack fuel capacity + mid-air thruster trickle recharge." },
+    { DailyMutatorId::GADGETRON_OVERLOAD, "GADGETRON OVERLOAD",
+      "HAZARD: Boss Warships & Dread-Mechs deploy +35% reinforced armor.",
+      "PERK: +30% faster Weapon Fire Rate & +50% Max Firearm Ammo reserves." },
+    { DailyMutatorId::RARITANIUM_RUSH, "RARITANIUM RUSH",
+      "HAZARD: Cross-sector Hover-Taxis, Magma Geysers, Piranhas & Cranes.",
+      "PERK: +32% of standard Bolt Crates crystallize into Raritanium Caches!" },
+    { DailyMutatorId::DEADLOCKED_GAUNTLET, "DEADLOCKED GAUNTLET",
+      "HAZARD: Boss Warships & Dread-Mechs ambush every 500m instead of 750m.",
+      "PERK: Defeating any Boss repairs +2 Nanotech HP & drops +3 extra Raritanium." }
+}};
+
+constexpr size_t CONTRACT_POOL_SIZE = 12;
+const std::array<DailyContractDef, CONTRACT_POOL_SIZE> CONTRACT_POOL = {{
+    { 0,  "CRATE BREAKER",      "Smash 35 Gadgetron Crates or Caches on the rails.", 35, 350, 3 },
+    { 1,  "WRENCH BRAWLER",     "Smash 18 targets up close using your OmniWrench.", 18, 350, 3 },
+    { 2,  "THUG HUNTER",        "Destroy 16 Thug Drones, Enforcers, or Hover-Taxis.", 16, 400, 3 },
+    { 3,  "VERSA-FUSE ACROBAT", "Grapple 5 green Swingshot Nodes across rail chasms.", 5, 350, 3 },
+    { 4,  "DEMOLITION EXPERT",  "Detonate 4 explosive TNT Barrels.", 4, 350, 3 },
+    { 5,  "HIGH ROLLER",        "Reach a 12x (or higher) Bolt Multiplier.", 1, 400, 4 },
+    { 6,  "MARATHON GRINDER",   "Grind 1,500 cumulative meters across runs.", 1500, 350, 3 },
+    { 7,  "CRYSTAL PROSPECTOR", "Mine 6 crystalline Raritanium Ores.", 6, 400, 3 },
+    { 8,  "BOSS SLAYER",        "Defeat a Boss Warship, Frigate, Galleon, or Mech.", 1, 450, 4 },
+    { 9,  "DEFLECTOR SHIELD",   "Deflect or vaporize 5 incoming enemy plasma shots.", 5, 350, 3 },
+    { 10, "SUPERSONIC RIDER",   "Trigger 6 Hyper-Boost Pads or Overdrive rushes.", 6, 350, 3 },
+    { 11, "SECTOR EXPLORER",    "Clear 3 galactic Sector Warp Gate transitions.", 3, 400, 3 }
+}};
 } // namespace
 
 RailGame::RailGame() = default;
@@ -66,6 +109,26 @@ const std::array<WeaponDef, NUM_WEAPONS>& RailGame::GetWeaponCatalog() {
 
 const std::array<SkillPointDef, NUM_SKILL_POINTS>& RailGame::GetSkillPointCatalog() {
     return SKILL_POINT_CATALOG;
+}
+
+const std::array<DailyMutatorDef, NUM_DAILY_MUTATORS>& RailGame::GetMutatorCatalog() {
+    return MUTATOR_CATALOG;
+}
+
+const DailyContractDef& RailGame::GetContractDef(int contractId) {
+    int clamped = std::clamp(contractId, 0, static_cast<int>(CONTRACT_POOL_SIZE) - 1);
+    return CONTRACT_POOL[clamped];
+}
+
+DailyMutatorId RailGame::GetTodaysMutator() const {
+    std::time_t t = std::time(nullptr);
+    std::tm* lt = std::localtime(&t);
+    int dayKey = (lt->tm_year + 1900) * 372 + (lt->tm_mon + 1) * 31 + lt->tm_mday;
+    return static_cast<DailyMutatorId>(std::abs(dayKey) % static_cast<int>(NUM_DAILY_MUTATORS));
+}
+
+bool RailGame::IsMutatorActive(DailyMutatorId mut) const {
+    return isDailyRun_ && (activeMutator_ == mut);
 }
 
 void RailGame::UpdateVirtualResolution() {
@@ -315,6 +378,7 @@ void RailGame::LoadSave() {
             save_.unlockedClankSkins[0] = true;
             save_.totalBoltsEarnedLifetime = std::max(save_.totalBoltsEarnedLifetime, save_.bolts);
             save_.totalRaritaniumEarnedLifetime = std::max(save_.totalRaritaniumEarnedLifetime, save_.raritanium);
+            RefreshDailyContracts();
             audio_.SetMasterVolume(save_.masterVolume);
             audio_.SetMusicVolume(save_.musicVolume);
             audio_.SetSfxVolume(save_.sfxVolume);
@@ -324,6 +388,7 @@ void RailGame::LoadSave() {
         }
     }
     save_ = SaveData{};
+    RefreshDailyContracts();
 }
 
 void RailGame::SaveProgress() const {
@@ -373,6 +438,173 @@ void RailGame::AddWeaponXp(int wIdx, int amount) {
         }
         SaveProgress();
     }
+}
+
+void RailGame::RefreshDailyContracts() {
+    std::time_t t = std::time(nullptr);
+    std::tm* lt = std::localtime(&t);
+    int dateKey = (lt->tm_year + 1900) * 10000 + (lt->tm_mon + 1) * 100 + lt->tm_mday;
+    bool validIds = true;
+    for (size_t i = 0; i < NUM_DAILY_CONTRACTS; ++i) {
+        if (save_.dailyContractIds[i] < 0 || save_.dailyContractIds[i] >= static_cast<int>(CONTRACT_POOL_SIZE)) {
+            validIds = false;
+        }
+    }
+    if (save_.dailyContractDateKey == dateKey && validIds) return;
+
+    save_.dailyContractDateKey = dateKey;
+    PCG32 cRng(static_cast<uint64_t>(dateKey) * 2654435761ULL, 77ULL);
+    std::array<int, CONTRACT_POOL_SIZE> order{};
+    for (size_t i = 0; i < CONTRACT_POOL_SIZE; ++i) order[i] = static_cast<int>(i);
+    for (int i = static_cast<int>(CONTRACT_POOL_SIZE) - 1; i > 0; --i) {
+        int j = cRng.RangeInt(0, i);
+        std::swap(order[i], order[j]);
+    }
+    for (size_t i = 0; i < NUM_DAILY_CONTRACTS; ++i) {
+        save_.dailyContractIds[i] = order[i];
+        save_.dailyContractProg[i] = 0;
+        save_.dailyContractDone[i] = false;
+    }
+    SaveProgress();
+}
+
+void RailGame::ProgressContract(int contractType, int amount) {
+    if (amount <= 0) return;
+    RefreshDailyContracts();
+    for (size_t i = 0; i < NUM_DAILY_CONTRACTS; ++i) {
+        if (save_.dailyContractDone[i]) continue;
+        if (save_.dailyContractIds[i] != contractType) continue;
+        const auto& def = GetContractDef(contractType);
+        int gain = (isDailyRun_ && def.targetCount > 1) ? (amount * 2) : amount;
+        save_.dailyContractProg[i] = std::min(def.targetCount, save_.dailyContractProg[i] + gain);
+        if (save_.dailyContractProg[i] >= def.targetCount) {
+            save_.dailyContractDone[i] = true;
+            save_.totalContractsCompleted++;
+            save_.bolts += def.boltReward;
+            save_.totalBoltsEarnedLifetime += def.boltReward;
+            save_.raritanium += def.rariReward;
+            save_.totalRaritaniumEarnedLifetime += def.rariReward;
+            runBoltsEarned_ += def.boltReward;
+            runRaritaniumEarned_ += def.rariReward;
+            SaveProgress();
+
+            toast_.active = true;
+            toast_.title = std::string("CONTRACT COMPLETE: ") + def.title;
+            toast_.subtitle = "+" + std::to_string(def.boltReward) + " Bolts & +" + std::to_string(def.rariReward) + " Raritanium!";
+            toast_.timer = 4.0f;
+            audio_.PlayLevelUp();
+        }
+    }
+}
+
+void RailGame::TriggerLiveRadioDare() {
+    if (activeDare_.active || boss_.active) return;
+    int pick = rng_.RangeInt(0, 6);
+    if (pick == lastDareType_) pick = (pick + 1 + rng_.RangeInt(0, 5)) % 7;
+    lastDareType_ = pick;
+
+    activeDare_ = LiveRadioDare{};
+    activeDare_.active = true;
+    activeDare_.dareType = pick;
+    activeDare_.progress = 0;
+    activeDare_.startDistance = distanceMeters_;
+
+    switch (pick) {
+        case 0:
+            activeDare_.speaker = CommSpeaker::CAPTAIN_QWARK;
+            activeDare_.speakerName = "CAPTAIN QWARK";
+            activeDare_.title = "WRENCH FU DARE";
+            activeDare_.prompt = "Holster that blaster, cadet! Smash 5 crates or foes with your OmniWrench!";
+            activeDare_.target = 5;
+            activeDare_.maxTimer = 18.0f;
+            break;
+        case 1:
+            activeDare_.speaker = CommSpeaker::DR_NEFARIOUS;
+            activeDare_.speakerName = "DR. NEFARIOUS";
+            activeDare_.title = "UNTOUCHABLE TAUNT";
+            activeDare_.prompt = "Bwahaha! Bet you can't grind 180m without taking a scratch OR crate bump!";
+            activeDare_.target = 180;
+            activeDare_.maxTimer = 20.0f;
+            break;
+        case 2:
+            activeDare_.speaker = CommSpeaker::CAPTAIN_QWARK;
+            activeDare_.speakerName = "CAPTAIN QWARK";
+            activeDare_.title = "DRONE SAFARI";
+            activeDare_.prompt = "Hostiles ahead! Blast or smash 3 Drones or Enforcers before time runs out!";
+            activeDare_.target = 3;
+            activeDare_.maxTimer = 20.0f;
+            break;
+        case 3:
+            activeDare_.speaker = CommSpeaker::CLANK;
+            activeDare_.speakerName = "CLANK";
+            activeDare_.title = "AERIAL CALIBRATION";
+            activeDare_.prompt = "Scanning high trajectories! Collect 10 airborne Bolts or grapple a Swingshot!";
+            activeDare_.target = 10;
+            activeDare_.maxTimer = 18.0f;
+            break;
+        case 4:
+            activeDare_.speaker = CommSpeaker::DR_NEFARIOUS;
+            activeDare_.speakerName = "DR. NEFARIOUS";
+            activeDare_.title = "PYROTECHNICS TEST";
+            activeDare_.prompt = "Give me explosions! Detonate a TNT Barrel or smash 6 objects on the rails!";
+            activeDare_.target = 6;
+            activeDare_.maxTimer = 18.0f;
+            break;
+        case 5:
+            activeDare_.speaker = CommSpeaker::CLANK;
+            activeDare_.speakerName = "CLANK";
+            activeDare_.title = "RAIL WEAVER";
+            activeDare_.prompt = "Testing Magne-Boot agility! Execute 6 clean rail hops without stumbling!";
+            activeDare_.target = 6;
+            activeDare_.maxTimer = 16.0f;
+            break;
+        default:
+            activeDare_.speaker = CommSpeaker::CAPTAIN_QWARK;
+            activeDare_.speakerName = "CAPTAIN QWARK";
+            activeDare_.title = "COMBO SHOWTIME";
+            activeDare_.prompt = "Give the holo-cameras a show! Score 7 Multiplier hits before my coffee cools!";
+            activeDare_.target = 7;
+            activeDare_.maxTimer = 18.0f;
+            break;
+    }
+    activeDare_.timer = activeDare_.maxTimer;
+    radioComm_.active = false; // Hand holographic comm channel to the live dare
+    audio_.PlayRadioChirp();
+}
+
+void RailGame::AdvanceRadioDare(int dareEventType, int amount) {
+    if (!activeDare_.active || activeDare_.dareType != dareEventType) return;
+    activeDare_.progress = std::min(activeDare_.target, activeDare_.progress + amount);
+    if (activeDare_.progress >= activeDare_.target) {
+        CommSpeaker spk = activeDare_.speaker;
+        std::string spkName = activeDare_.speakerName;
+        activeDare_.active = false;
+        save_.totalRadioDaresCompleted++;
+        int rariBonus = isDailyRun_ ? 2 : 1;
+        SpawnBoltShower({ player_.x, player_.y + 1.2f, 2.5f }, 7 + rariBonus, rariBonus);
+        audio_.PlayRaritaniumPickup();
+        SaveProgress();
+
+        if (spk == CommSpeaker::DR_NEFARIOUS) {
+            TriggerRadioTransmission(spk, spkName, "WHAT?! IMPOSSIBLE! LAWRENCE, WHO CALIBRATED THAT OBSTACLE COURSE?!");
+        } else if (spk == CommSpeaker::CLANK) {
+            TriggerRadioTransmission(spk, spkName, "Telemetry confirmed, Ratchet! Supply cache & Raritanium deployed ahead.");
+        } else {
+            TriggerRadioTransmission(spk, spkName, "Magnificent! Almost as graceful as me! Catch your bonus Raritanium, cadet!");
+        }
+        radioComm_.timer = 3.0f;
+        radioComm_.maxTimer = 3.0f;
+    }
+}
+
+void RailGame::FailRadioDare(const char* failReason) {
+    if (!activeDare_.active) return;
+    CommSpeaker spk = activeDare_.speaker;
+    std::string spkName = activeDare_.speakerName;
+    activeDare_.active = false;
+    TriggerRadioTransmission(spk, spkName, failReason);
+    radioComm_.timer = 2.4f;
+    radioComm_.maxTimer = 2.4f;
 }
 
 bool RailGame::HasAffordableArsenalTab(int tab) const {
@@ -431,7 +663,12 @@ bool RailGame::HasAnyAffordableUpgrade() const {
 }
 
 void RailGame::StartNewRun(bool dailySeed) {
+    RefreshDailyContracts();
     isDailyRun_ = dailySeed;
+    activeMutator_ = GetTodaysMutator();
+    activeDare_ = LiveRadioDare{};
+    nextDareDistance_ = 220.0f;
+    runDistanceCarry_ = 0.0f;
     unpauseRampTimer_ = 0.0f;
     if (dailySeed) {
         activeSeed_ = PCG32::GetDailyChallengeSeed();
@@ -476,6 +713,9 @@ void RailGame::StartNewRun(bool dailySeed) {
     }
     player_.nanotechHp = player_.maxNanotechHp;
     player_.maxHeliFuel = 1.2f + save_.bootThrusterLevel * 0.25f;
+    if (IsMutatorActive(DailyMutatorId::AERIAL_ASSAULT)) {
+        player_.maxHeliFuel *= 2.0f;
+    }
     player_.heliFuel = player_.maxHeliFuel;
     player_.multiplierTier = 1;
     player_.multiplierProgress = 0.0f;
@@ -485,9 +725,20 @@ void RailGame::StartNewRun(bool dailySeed) {
             player_.weaponMaxAmmo[w] = 999;
         } else {
             int lvlBonus = (save_.weaponLevels[w] - 1) * std::max(2, BASE_AMMO[w] / 8);
-            player_.weaponMaxAmmo[w] = BASE_AMMO[w] + lvlBonus;
+            int maxCap = BASE_AMMO[w] + lvlBonus;
+            if (IsMutatorActive(DailyMutatorId::GADGETRON_OVERLOAD)) {
+                maxCap = (maxCap * 3) / 2;
+            }
+            player_.weaponMaxAmmo[w] = maxCap;
         }
         player_.weaponAmmo[w] = player_.weaponMaxAmmo[w];
+    }
+
+    if (isDailyRun_) {
+        const auto& mDef = MUTATOR_CATALOG[static_cast<int>(activeMutator_)];
+        TriggerRadioTransmission(CommSpeaker::CAPTAIN_QWARK,
+                                 std::string("DAILY MUTATOR // ") + mDef.name,
+                                 mDef.perkDesc);
     }
 
     boss_ = BossDropship{};
@@ -676,6 +927,7 @@ void RailGame::SwitchLane(int delta) {
         // Radial burst of magnetic grind boot disengagement sparks
         SpawnParticleBurst3D({ player_.x, player_.y + 0.1f, 0.0f }, 12, SKYBLUE, 3.0f, 8.0f, 0.20f, 0.28f);
         audio_.PlayRailHop();
+        AdvanceRadioDare(5, 1);
     }
 }
 
@@ -770,9 +1022,15 @@ void RailGame::TriggerFireWeapon() {
     bool isGolden = save_.goldenWeapons[wIdx];
     float dmg = wDef.baseDamage * (1.0f + (wLvl - 1) * 0.28f);
     if (isGolden) dmg *= 1.45f;
+    if (IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) && (wIdx == 0 || wIdx == 1)) {
+        dmg *= 2.0f;
+    }
 
     player_.weaponCooldown = wDef.fireCooldown * std::max(0.65f, 1.0f - (wLvl - 1) * 0.06f);
     if (isGolden) player_.weaponCooldown *= 0.85f; // Faster golden cycle
+    if (IsMutatorActive(DailyMutatorId::GADGETRON_OVERLOAD)) {
+        player_.weaponCooldown *= 0.70f;
+    }
     WeaponId wId = static_cast<WeaponId>(wIdx);
     Color projColor = isGolden ? GOLDEN_WEAPON_CATALOG[wIdx].projectileColor : wDef.projectileColor;
     Vector3 muzzle = { player_.x - 0.38f, player_.y + 1.18f, 1.35f };
@@ -801,6 +1059,7 @@ void RailGame::TriggerFireWeapon() {
                 ep.color = isGolden ? GOLD : SKYBLUE;
                 ep.life = 2.0f;
                 SpawnParticleBurst3D(ep.pos, 12, ep.color, 3.0f, 10.0f, 0.22f, 0.30f);
+                ProgressContract(9, 1);
             }
         }
     } else if (wId == WeaponId::COMBUSTER) {
@@ -823,6 +1082,7 @@ void RailGame::TriggerFireWeapon() {
             if (ep.active && !ep.friendly && ep.pos.z > 0.0f && ep.pos.z < 42.0f) {
                 ep.active = false;
                 SpawnParticleBurst3D(ep.pos, 10, isGolden ? GOLD : SKYBLUE, 2.5f, 9.0f, 0.20f, 0.25f);
+                ProgressContract(9, 1);
             }
         }
         for (int lane = 0; lane < NUM_LANES; ++lane) {
@@ -856,9 +1116,13 @@ void RailGame::TriggerFireWeapon() {
 }
 
 void RailGame::AdvanceMultiplier() {
+    AdvanceRadioDare(6, 1);
     float step = 0.22f + save_.multiplierModLevel * 0.04f;
     if (save_.equippedArmor == static_cast<int>(ArmorSuitId::LOMBAX_PRAETORIAN)) {
         step *= 1.50f; // Lombax Praetorian Perk: +50% faster Bolt Multiplier escalation!
+    }
+    if (IsMutatorActive(DailyMutatorId::OVERCLOCKED_RAILS)) {
+        step *= 1.60f;
     }
     player_.multiplierProgress += step;
     if (player_.multiplierProgress >= 1.0f) {
@@ -866,9 +1130,13 @@ void RailGame::AdvanceMultiplier() {
         if (player_.multiplierTier == 1) player_.multiplierTier = 2;
         else if (player_.multiplierTier == 2) player_.multiplierTier = 4;
         else if (player_.multiplierTier == 4) player_.multiplierTier = 8;
-        else if (player_.multiplierTier == 8) player_.multiplierTier = 12;
+        else if (player_.multiplierTier == 8) {
+            player_.multiplierTier = 12;
+            ProgressContract(5, 1);
+        }
         else if (player_.multiplierTier >= 12) {
             player_.multiplierTier = 20;
+            ProgressContract(5, 1);
             AwardSkillPoint(2); // MAXIMUM MULTIPLIER
         }
     }
@@ -878,6 +1146,7 @@ void RailGame::TriggerOverdriveBoost() {
     if (!save_.hoverbootsUnlocked) return;
     if (player_.overdriveCooldown > 0.0f) return;
     save_.totalOverdriveBoosts++;
+    ProgressContract(10, 1);
     player_.overdriveDuration = 3.0f;
     player_.overdriveCooldown = 11.0f;
     player_.invulnTimer = 3.0f;
@@ -893,6 +1162,8 @@ void RailGame::TriggerOverdriveBoost() {
 void RailGame::TriggerSwingshotGrapple(Vector3 nodePos, int targetLane) {
     if (player_.isSwinging) return;
     save_.totalSwingshotGrapples++;
+    ProgressContract(3, 1);
+    AdvanceRadioDare(3, 5);
     player_.isSwinging = true;
     player_.swingTimer = 0.0f;
     player_.swingStartX = player_.x;
@@ -915,6 +1186,12 @@ void RailGame::TriggerRadioTransmission(CommSpeaker speaker, const std::string& 
 
 void RailGame::DamagePlayer(float dmg, bool minorBump) {
     if (player_.invulnTimer > 0.0f || player_.hyperBoostTimer > 0.0f) return;
+
+    if (activeDare_.active && (activeDare_.dareType == 1 || activeDare_.dareType == 5)) {
+        FailRadioDare(activeDare_.dareType == 1
+                      ? "BWAHAHA! Too clumsy, Lombax! Untouchable wager VOIDED!"
+                      : "Impact detected, Ratchet. Agility calibration aborted.");
+    }
 
     player_.nanotechHp -= dmg;
     player_.invulnTimer = minorBump ? 0.95f : 1.65f;
@@ -984,6 +1261,12 @@ void RailGame::SpawnChunkPattern(float startZ) {
     float worldZ = totalWorldTravel_ + startZ;
     int minLane = GetCorridorMinLaneAt(worldZ);
     std::array<int, 3> activeLanes = { minLane, minLane + 1, minLane + 2 };
+    auto CrateOrRari = [&]() -> HazardKind {
+        if (IsMutatorActive(DailyMutatorId::RARITANIUM_RUSH) && rng_.Chance(0.32f)) {
+            return HazardKind::RARITANIUM_CACHE;
+        }
+        return HazardKind::BOLT_CRATE;
+    };
 
     if (pattern == 0) {
         // Wave 0: Single Laser Gate Row with 1 Open Safe Lane + Guided Bolt Line
@@ -992,9 +1275,9 @@ void RailGame::SpawnChunkPattern(float startZ) {
         for (int l : activeLanes) {
             if (l == safeLane) {
                 SpawnHazard((player_.nanotechHp < player_.maxNanotechHp && rng_.Chance(0.45f))
-                            ? HazardKind::NANOTECH_CRATE : HazardKind::BOLT_CRATE, l, startZ + 18.0f);
+                            ? HazardKind::NANOTECH_CRATE : CrateOrRari(), l, startZ + 18.0f);
             } else {
-                bool isLow = rng_.Chance(0.55f);
+                bool isLow = IsMutatorActive(DailyMutatorId::AERIAL_ASSAULT) ? true : rng_.Chance(0.55f);
                 SpawnHazard(isLow ? HazardKind::LOW_LASER_BARRIER : HazardKind::HIGH_LASER_GATE, l, startZ + 10.0f);
                 if (isLow) {
                     SpawnRailBoltLine(l, startZ + 4.0f, 5, 2.8f, true);
@@ -1032,16 +1315,16 @@ void RailGame::SpawnChunkPattern(float startZ) {
         SpawnRailBoltLine(clearLane, startZ + 4.0f, 6, 2.8f, false);
         SpawnHazard(HazardKind::THUG_DRONE, droneLane, startZ + 14.0f);
         SpawnHazard(HazardKind::TNT_CRATE, tntLane, startZ + 12.0f);
-        SpawnHazard(HazardKind::BOLT_CRATE, droneLane, startZ + 24.0f);
+        SpawnHazard(CrateOrRari(), droneLane, startZ + 24.0f);
     } else if (pattern == 3) {
         // Wave 3: Single Clean Jump or Slide Line
         int openLane = activeLanes[rng_.RangeInt(0, 2)];
         for (int l : activeLanes) {
             if (l == openLane) {
                 SpawnRailBoltLine(l, startZ + 4.0f, 5, 2.8f, false);
-                SpawnHazard(HazardKind::BOLT_CRATE, l, startZ + 20.0f);
+                SpawnHazard(CrateOrRari(), l, startZ + 20.0f);
             } else {
-                bool isLow = (l % 2 == 0);
+                bool isLow = IsMutatorActive(DailyMutatorId::AERIAL_ASSAULT) ? true : (l % 2 == 0);
                 SpawnHazard(isLow ? HazardKind::LOW_LASER_BARRIER : HazardKind::HIGH_LASER_GATE, l, startZ + 11.0f);
                 if (isLow) {
                     SpawnRailBoltLine(l, startZ + 5.5f, 5, 2.6f, true);
@@ -1054,7 +1337,7 @@ void RailGame::SpawnChunkPattern(float startZ) {
         int enfLane  = (activeLanes[0] == safeLane) ? activeLanes[1] : activeLanes[0];
         int elecLane = (activeLanes[2] == safeLane) ? activeLanes[1] : activeLanes[2];
         SpawnRailBoltLine(safeLane, startZ + 4.0f, 6, 2.8f, false);
-        SpawnHazard(HazardKind::BOLT_CRATE, safeLane, startZ + 22.0f);
+        SpawnHazard(CrateOrRari(), safeLane, startZ + 22.0f);
         SpawnHazard(HazardKind::SHIELDED_ENFORCER, enfLane, startZ + 14.0f);
         SpawnHazard(HazardKind::ELECTRIFIED_RAIL, elecLane, startZ + 12.0f, 9.5f);
     } else if (pattern == 5) {
@@ -1065,7 +1348,7 @@ void RailGame::SpawnChunkPattern(float startZ) {
             if (l == rariLane) {
                 SpawnHazard(rng_.Chance(0.55f) ? HazardKind::RARITANIUM_CACHE : HazardKind::NANOTECH_CRATE, l, startZ + 18.0f);
             } else {
-                SpawnHazard(HazardKind::BOLT_CRATE, l, startZ + 18.0f);
+                SpawnHazard(CrateOrRari(), l, startZ + 18.0f);
             }
         }
     } else {
@@ -1077,12 +1360,31 @@ void RailGame::SpawnChunkPattern(float startZ) {
             if (l != open1) SpawnHazard(HazardKind::ELECTRIFIED_RAIL, l, startZ + 8.0f, 7.5f);
         }
         SpawnRailBoltLine(open2, startZ + 22.0f, 5, 2.6f, false);
-        SpawnHazard(HazardKind::BOLT_CRATE, open2, startZ + 36.0f);
+        SpawnHazard(CrateOrRari(), open2, startZ + 36.0f);
+    }
+
+    // Daily Mutator Track Composition Modifiers (always placed at startZ + 30m so primary lane stays fair!)
+    if (IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) && rng_.Chance(0.55f)) {
+        int eLane = activeLanes[rng_.RangeInt(0, 2)];
+        SpawnHazard(rng_.Chance(0.45f) ? HazardKind::SHIELDED_ENFORCER : HazardKind::THUG_DRONE, eLane, startZ + 31.0f);
+    } else if (IsMutatorActive(DailyMutatorId::HIGH_VOLTAGE_GRID) && rng_.Chance(0.52f)) {
+        int vLane = activeLanes[rng_.RangeInt(0, 2)];
+        SpawnHazard(HazardKind::ELECTRIFIED_RAIL, vLane, startZ + 30.0f, 7.0f);
+    } else if (IsMutatorActive(DailyMutatorId::VOLATILE_CARGO) && rng_.Chance(0.58f)) {
+        int tLane = activeLanes[rng_.RangeInt(0, 2)];
+        SpawnHazard(HazardKind::TNT_CRATE, tLane, startZ + 30.0f);
+    } else if (IsMutatorActive(DailyMutatorId::OVERCLOCKED_RAILS) && rng_.Chance(0.48f)) {
+        int bLane = activeLanes[rng_.RangeInt(0, 2)];
+        SpawnHazard(HazardKind::HYPER_BOOST_PAD, bLane, startZ + 30.0f);
     }
 
     // Dynamic Sector-Specific Environmental Hazards
     GalaxySector sec = GetCurrentSector();
-    if (sec == GalaxySector::CORSON_V && rng_.Chance(0.42f)) {
+    if (IsMutatorActive(DailyMutatorId::RARITANIUM_RUSH) && rng_.Chance(0.45f)) {
+        int xLane = activeLanes[rng_.RangeInt(0, 2)];
+        HazardKind wild[4] = { HazardKind::HOVER_TAXI, HazardKind::MAGMA_GEYSER, HazardKind::PIRANHA_LEAP, HazardKind::SWINGING_CRANE_SCRAP };
+        SpawnHazard(wild[rng_.RangeInt(0, 3)], xLane, startZ + 27.0f);
+    } else if (sec == GalaxySector::CORSON_V && rng_.Chance(0.42f)) {
         int tLane = activeLanes[rng_.RangeInt(0, 2)];
         SpawnHazard(HazardKind::HOVER_TAXI, tLane, startZ + 28.0f);
     } else if (sec == GalaxySector::GASPAR_VOLCANIC && rng_.Chance(0.48f)) {
@@ -1233,7 +1535,11 @@ void RailGame::TriggerBossDropship() {
     boss_.hoverX = 0.0f;
     boss_.hoverY = 4.2f;
     boss_.phase = 0.0f;
+    activeDare_.active = false; // Clear radio channel for Boss encounter
     boss_.maxTurretHp = 110.0f + boss_.bossTier * 45.0f;
+    if (IsMutatorActive(DailyMutatorId::GADGETRON_OVERLOAD)) {
+        boss_.maxTurretHp *= 1.35f;
+    }
     boss_.turretHp = { 0.0f, boss_.maxTurretHp, boss_.maxTurretHp, boss_.maxTurretHp, 0.0f };
     boss_.telegraphLane = -1;
     boss_.telegraphTimer = 0.0f;
@@ -1684,8 +1990,12 @@ void RailGame::HandleInput() {
                         SetScreenMode(ScreenMode::ARMOR_WARDROBE);
                     }
                     audio_.PlayUiClick();
-                } else if (mode_ == ScreenMode::SKILL_POINTS_VIEW || mode_ == ScreenMode::STATS_VIEW) {
-                    SetScreenMode(mode_ == ScreenMode::SKILL_POINTS_VIEW ? ScreenMode::STATS_VIEW : ScreenMode::SKILL_POINTS_VIEW);
+                } else if (mode_ == ScreenMode::BOUNTIES_VIEW || mode_ == ScreenMode::SKILL_POINTS_VIEW || mode_ == ScreenMode::STATS_VIEW) {
+                    int curTab = (mode_ == ScreenMode::BOUNTIES_VIEW) ? 0 : (mode_ == ScreenMode::SKILL_POINTS_VIEW ? 1 : 2);
+                    int nextTab = (curTab + tabDelta + 3) % 3;
+                    if (nextTab == 0) SetScreenMode(ScreenMode::BOUNTIES_VIEW);
+                    else if (nextTab == 1) SetScreenMode(ScreenMode::SKILL_POINTS_VIEW);
+                    else SetScreenMode(ScreenMode::STATS_VIEW);
                     audio_.PlayUiClick();
                 } else if (mode_ == ScreenMode::SETTINGS_VIEW) {
                     settingsTab_ = 1 - settingsTab_;
@@ -1755,6 +2065,9 @@ void RailGame::UpdatePlayingFixed(float dt) {
     runTime_ += dt;
 
     float baseSpd = (isDailyRun_ ? 42.0f : 38.0f) + std::min(28.0f, distanceMeters_ * 0.012f);
+    if (IsMutatorActive(DailyMutatorId::OVERCLOCKED_RAILS)) {
+        baseSpd *= 1.12f;
+    }
     if (player_.hyperBoostTimer > 0.0f) {
         player_.hyperBoostTimer = std::max(0.0f, player_.hyperBoostTimer - dt);
         baseSpd *= 1.55f;
@@ -1763,8 +2076,32 @@ void RailGame::UpdatePlayingFixed(float dt) {
 
     float stepDist = grindSpeed_ * dt;
     totalWorldTravel_ += stepDist;
-    distanceMeters_ += stepDist * 0.45f;
-    distanceSinceBoss_ += stepDist * 0.45f;
+    float dMeters = stepDist * 0.45f;
+    distanceMeters_ += dMeters;
+    distanceSinceBoss_ += dMeters;
+    runDistanceCarry_ += dMeters;
+    if (runDistanceCarry_ >= 10.0f) {
+        int dm = static_cast<int>(runDistanceCarry_);
+        runDistanceCarry_ -= static_cast<float>(dm);
+        ProgressContract(6, dm);
+    }
+
+    if (activeDare_.active) {
+        activeDare_.timer -= dt;
+        if (activeDare_.dareType == 1) {
+            int cleanMeters = static_cast<int>(std::max(0.0f, distanceMeters_ - activeDare_.startDistance));
+            activeDare_.progress = std::min(activeDare_.target, cleanMeters);
+            if (activeDare_.progress >= activeDare_.target) {
+                AdvanceRadioDare(1, 0);
+            }
+        }
+        if (activeDare_.active && activeDare_.timer <= 0.0f) {
+            activeDare_.active = false;
+        }
+    } else if (!boss_.active && sectorBannerTimer_ <= 0.0f && !radioComm_.active && distanceMeters_ >= nextDareDistance_) {
+        nextDareDistance_ = distanceMeters_ + 460.0f;
+        TriggerLiveRadioDare();
+    }
 
     if (distanceMeters_ >= 500.0f) AwardSkillPoint(0);  // GRIND BOOT INITIATE
     if (distanceMeters_ >= 1500.0f) AwardSkillPoint(7); // DIMENSION HOPPER
@@ -1775,6 +2112,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
         lastSector_ = curSec;
         sectorBannerTimer_ = 3.5f;
         GrantWeaponAmmo(50, true);
+        ProgressContract(11, 1);
         if (isDailyRun_) {
             save_.raritanium += 2;
             save_.totalRaritaniumEarnedLifetime += 2;
@@ -1875,8 +2213,9 @@ void RailGame::UpdatePlayingFixed(float dt) {
         }
     }
 
-    // Trigger Boss Encounter every 750m
-    if (!boss_.active && distanceSinceBoss_ >= 750.0f) {
+    // Trigger Boss Encounter every 750m (or 500m in Deadlocked Gauntlet!)
+    float bossInterval = IsMutatorActive(DailyMutatorId::DEADLOCKED_GAUNTLET) ? 500.0f : 750.0f;
+    if (!boss_.active && distanceSinceBoss_ >= bossInterval) {
         TriggerBossDropship();
     }
 
@@ -1977,6 +2316,8 @@ void RailGame::UpdatePlayingFixed(float dt) {
         if (player_.heliGliding && player_.emergencyHoverTimer <= 0.0f) {
             player_.heliFuel = std::max(0.0f, player_.heliFuel - dt);
             if (player_.heliFuel <= 0.0f) player_.heliGliding = false;
+        } else if (IsMutatorActive(DailyMutatorId::AERIAL_ASSAULT)) {
+            player_.heliFuel = std::min(player_.maxHeliFuel, player_.heliFuel + 0.38f * dt);
         }
         player_.vy -= grav * dt;
         player_.y += player_.vy * dt;
@@ -2072,21 +2413,31 @@ void RailGame::UpdatePlayingFixed(float dt) {
     auto DetonateTntAt = [&](int tntLane, float tntZ) {
         audio_.PlayExplosion();
         cameraShake_ = 0.65f;
+        ProgressContract(4, 1);
+        AdvanceRadioDare(4, 6);
         SpawnParticleBurst3D({ GetLaneX(tntLane), 1.2f, tntZ }, 45, ORANGE, 5.0f, 18.0f, 0.40f, 0.65f);
         bool killedSomething = false;
+        float blastZ = IsMutatorActive(DailyMutatorId::VOLATILE_CARGO) ? 16.0f : 9.5f;
+        int baseBolts = IsMutatorActive(DailyMutatorId::VOLATILE_CARGO) ? 10 : 5;
         for (auto& other : hazards_) {
             if (!other.active) continue;
-            if (std::abs(other.z - tntZ) < 9.5f) {
+            if (std::abs(other.z - tntZ) < blastZ) {
                 if (other.kind == HazardKind::BOLT_CRATE || other.kind == HazardKind::RARITANIUM_CACHE ||
                     other.kind == HazardKind::NANOTECH_CRATE ||
                     other.kind == HazardKind::THUG_DRONE || other.kind == HazardKind::SHIELDED_ENFORCER) {
                     other.active = false;
                     killedSomething = true;
                     bool othEnemy = (other.kind == HazardKind::THUG_DRONE || other.kind == HazardKind::SHIELDED_ENFORCER);
+                    if (othEnemy) {
+                        ProgressContract(2, 1);
+                        AdvanceRadioDare(2, 1);
+                    } else {
+                        ProgressContract(0, 1);
+                    }
                     int othRari = (other.kind == HazardKind::RARITANIUM_CACHE)
                                 ? ((isDailyRun_ || distanceMeters_ >= 750.0f) ? 2 : 1)
                                 : ((othEnemy && rng_.Chance(0.20f)) ? 1 : 0);
-                    SpawnBoltShower({ GetLaneX(other.lane), 1.2f, other.z }, 5 + othRari, othRari);
+                    SpawnBoltShower({ GetLaneX(other.lane), 1.2f, other.z }, baseBolts + othRari, othRari);
                 }
             }
         }
@@ -2133,14 +2484,20 @@ void RailGame::UpdatePlayingFixed(float dt) {
                 audio_.PlayWrenchSmash();
                 AdvanceMultiplier();
                 AddWeaponXp(0, isEnemy ? 20 : 12);
+                ProgressContract(1, 1);
+                AdvanceRadioDare(0, 1);
+                AdvanceRadioDare(4, 1);
                 if (isEnemy) {
                     runKills_++;
                     save_.totalEnemiesDestroyed++;
+                    ProgressContract(2, 1);
+                    AdvanceRadioDare(2, 1);
                     if (runKills_ >= 15) AwardSkillPoint(4);
                 } else {
                     runCrates_++;
                     save_.totalCratesSmashed++;
-                    GrantWeaponAmmo(30, false);
+                    ProgressContract(0, 1);
+                    GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 50 : 30, false);
                     if (runCrates_ >= 25) AwardSkillPoint(1); // WRENCH NINJA
                     if (isRari) AwardSkillPoint(8);           // RARITANIUM MINER
                 }
@@ -2202,6 +2559,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
                 if (player_.y < 1.5f) {
                     h.active = false;
                     player_.hyperBoostTimer = 2.6f + save_.bootThrusterLevel * 0.3f;
+                    ProgressContract(10, 1);
                     audio_.PlayHyperBoost();
                     screenFlashColor_ = GREEN;
                     screenFlashAlpha_ = 0.3f;
@@ -2408,11 +2766,16 @@ void RailGame::UpdatePlayingFixed(float dt) {
                             if (wasEnemy) {
                                 runKills_++;
                                 save_.totalEnemiesDestroyed++;
+                                ProgressContract(2, 1);
+                                AdvanceRadioDare(2, 1);
+                                AdvanceRadioDare(4, 1);
                                 if (runKills_ >= 15) AwardSkillPoint(4); // THUG BUSTER
                             } else {
                                 runCrates_++;
                                 save_.totalCratesSmashed++;
-                                GrantWeaponAmmo(20, false);
+                                ProgressContract(0, 1);
+                                AdvanceRadioDare(4, 1);
+                                GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 40 : 20, false);
                                 if (runCrates_ >= 25) AwardSkillPoint(1); // WRENCH NINJA
                                 if (wasRari) AwardSkillPoint(8);          // RARITANIUM MINER
                             }
@@ -2498,13 +2861,17 @@ void RailGame::UpdatePlayingFixed(float dt) {
             // Upgrading Box Breaker Magnet in the Raritanium Lab slightly widens pickup reach on your rail.
             // Infernox Armor grants an additional +0.65m volcanic magnetic pull!
             float infBonus = (save_.equippedArmor == static_cast<int>(ArmorSuitId::INFERNOX)) ? 0.65f : 0.0f;
-            float maxDx = 1.25f + save_.magnetLevel * 0.35f + infBonus;
+            float gridBonus = IsMutatorActive(DailyMutatorId::HIGH_VOLTAGE_GRID) ? 3.35f : 0.0f;
+            float maxDx = 1.25f + save_.magnetLevel * 0.35f + infBonus + gridBonus;
             float maxDy = 1.35f + save_.magnetLevel * 0.25f + infBonus;
             float maxDz = 2.0f  + save_.magnetLevel * 1.1f  + infBonus * 1.5f;
 
             if (std::abs(b.pos.x - playerCenter.x) < maxDx &&
                 std::abs(b.pos.y - playerCenter.y) < maxDy &&
                 std::abs(b.pos.z - playerCenter.z) < maxDz) {
+                if (b.pos.y > 1.25f || player_.y > 0.75f) {
+                    AdvanceRadioDare(3, 1);
+                }
                 b.onRail = false; // Pull into Ratchet!
             }
         } else {
@@ -2530,6 +2897,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
                 save_.raritanium += b.value;
                 save_.totalRaritaniumEarnedLifetime += b.value;
                 runRaritaniumEarned_ += b.value;
+                ProgressContract(7, b.value);
                 audio_.PlayRaritaniumPickup();
                 AwardSkillPoint(8);
             } else {
@@ -2578,6 +2946,11 @@ void RailGame::UpdateBossFixed(float dt) {
         boss_.active = false;
         distanceSinceBoss_ = 0.0f;
         save_.totalBossesDefeated++;
+        ProgressContract(8, 1);
+        if (IsMutatorActive(DailyMutatorId::DEADLOCKED_GAUNTLET)) {
+            player_.nanotechHp = std::min(player_.maxNanotechHp, player_.nanotechHp + 2.0f);
+            SpawnBoltShower({ player_.x, player_.y + 1.5f, 4.0f }, 6, 3);
+        }
         cameraShake_ = 0.9f;
         screenFlashColor_ = GOLD;
         screenFlashAlpha_ = 0.6f;

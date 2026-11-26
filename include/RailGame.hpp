@@ -19,6 +19,10 @@ public:
 
     static const std::array<WeaponDef, NUM_WEAPONS>& GetWeaponCatalog();
     static const std::array<SkillPointDef, NUM_SKILL_POINTS>& GetSkillPointCatalog();
+    static const std::array<DailyMutatorDef, NUM_DAILY_MUTATORS>& GetMutatorCatalog();
+    static const DailyContractDef& GetContractDef(int contractId);
+    DailyMutatorId GetTodaysMutator() const;
+    bool IsMutatorActive(DailyMutatorId mut) const;
 
     float GetVirtualWidth() const { return virtualWidth_; }
     float GetVirtualHeight() const { return 720.0f; }
@@ -30,6 +34,11 @@ private:
     void SaveProgress() const;
     void AwardSkillPoint(int idx);
     void AddWeaponXp(int wIdx, int amount);
+    void RefreshDailyContracts();
+    void ProgressContract(int contractType, int amount = 1);
+    void TriggerLiveRadioDare();
+    void AdvanceRadioDare(int dareEventType, int amount = 1);
+    void FailRadioDare(const char* failReason);
 
     // Run Control
     void StartNewRun(bool dailySeed);
@@ -101,6 +110,7 @@ private:
     void RenderGadgetronVendor2D();
     void RenderRaritaniumLab2D();
     void RenderArmorWardrobe2D();
+    void RenderBounties2D();
     void RenderSkillPoints2D();
     void RenderSettings2D();
     void RenderCareerStats2D();
@@ -124,6 +134,11 @@ private:
     float splashTimer_ = 0.0f;
     Texture2D splashLogo_{};
     bool isDailyRun_ = false;
+    DailyMutatorId activeMutator_ = DailyMutatorId::ARMORED_CONVOY;
+    LiveRadioDare activeDare_{};
+    float nextDareDistance_ = 220.0f;
+    int lastDareType_ = -1;
+    float runDistanceCarry_ = 0.0f;
     uint64_t activeSeed_ = 0;
 
     float accumulator_ = 0.0f;

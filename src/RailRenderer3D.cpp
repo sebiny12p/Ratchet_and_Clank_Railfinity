@@ -318,6 +318,8 @@ void RailGame::RenderFrame() {
         RenderRaritaniumLab2D();
     } else if (mode_ == ScreenMode::ARMOR_WARDROBE) {
         RenderArmorWardrobe2D();
+    } else if (mode_ == ScreenMode::BOUNTIES_VIEW) {
+        RenderBounties2D();
     } else if (mode_ == ScreenMode::SKILL_POINTS_VIEW) {
         RenderSkillPoints2D();
     } else if (mode_ == ScreenMode::SETTINGS_VIEW) {
@@ -347,7 +349,8 @@ void RailGame::RenderFrame() {
 void RailGame::RenderWorld3D() {
     Camera3D cam = camera_;
     if (mode_ == ScreenMode::MAIN_MENU || mode_ == ScreenMode::GADGETRON_VENDOR ||
-        mode_ == ScreenMode::RARITANIUM_LAB || mode_ == ScreenMode::SKILL_POINTS_VIEW) {
+        mode_ == ScreenMode::RARITANIUM_LAB || mode_ == ScreenMode::BOUNTIES_VIEW ||
+        mode_ == ScreenMode::SKILL_POINTS_VIEW) {
         cam.position = { std::sin(globalTime_ * 0.5f) * 1.4f, 3.05f, -6.2f };
         cam.target = { GetTrackCurveX(28.0f) * 0.35f, 2.1f, 28.0f };
         cam.fovy = 50.0f;
@@ -3096,9 +3099,6 @@ void RailGame::RenderMainMenu2D() {
     float menuW = 310.0f;
 
     // 2-Segment Mode Toggle: [ STANDARD ] | [ DAILY ]
-    if (menuSelectDaily_) {
-        DrawText("DAILY BONUS: 2x RARITANIUM CACHES & +2 RARI / SECTOR", static_cast<int>(menuX), 158, 12, GOLD);
-    }
     Rectangle segStd   = { menuX,                  178.0f, menuW * 0.5f - 3.0f, 38.0f };
     Rectangle segDaily = { menuX + menuW * 0.5f + 3.0f, 178.0f, menuW * 0.5f - 3.0f, 38.0f };
 
@@ -3152,7 +3152,8 @@ void RailGame::RenderMainMenu2D() {
         DrawUpgradeBadge(btnArsenal, globalTime_);
     }
     if (CleanMenuBtn(btnRecords, "RECORDS", 20, MAGENTA, false)) {
-        SetScreenMode(ScreenMode::SKILL_POINTS_VIEW);
+        RefreshDailyContracts();
+        SetScreenMode(ScreenMode::BOUNTIES_VIEW);
         audio_.PlayUiClick();
     }
     if (CleanMenuBtn(btnSettings, "SETTINGS", 20, PURPLE, false)) {
@@ -3160,6 +3161,20 @@ void RailGame::RenderMainMenu2D() {
         settingsPrevMode_ = ScreenMode::MAIN_MENU;
         SetScreenMode(ScreenMode::SETTINGS_VIEW);
         audio_.PlayUiClick();
+    }
+
+    if (menuSelectDaily_) {
+        const auto& mDef = GetMutatorCatalog()[static_cast<int>(GetTodaysMutator())];
+        Rectangle card = { virtualWidth_ - 492.0f, 488.0f, 436.0f, 152.0f };
+        DrawRectangleRec(card, { 12, 18, 32, 232 });
+        DrawRectangleLinesEx(card, 2.0f, GOLD);
+        DrawRectangle(static_cast<int>(card.x), static_cast<int>(card.y), static_cast<int>(card.width), 30, { 38, 28, 12, 245 });
+        DrawText("TODAY'S DAILY ARENA MUTATOR", static_cast<int>(card.x + 14), static_cast<int>(card.y + 8), 13, GOLD);
+        DrawText(mDef.name, static_cast<int>(card.x + 14), static_cast<int>(card.y + 38), 20, WHITE);
+        DrawTextWrapped(mDef.hazardDesc, static_cast<int>(card.x + 14), static_cast<int>(card.y + 66), 408, 13, 16, ORANGE);
+        DrawTextWrapped(mDef.perkDesc, static_cast<int>(card.x + 14), static_cast<int>(card.y + 98), 408, 13, 16, GREEN);
+        DrawText("REWARDS: 2x Contract Speed  |  2x Rari Caches  |  +2 Rari/Sector",
+                 static_cast<int>(card.x + 14), static_cast<int>(card.y + 132), 12, SKYBLUE);
     }
 
     RenderBrandingFooter2D();
@@ -3988,23 +4003,30 @@ void RailGame::RenderCareerStats2D() {
     float cardW = 1160.0f;
     float cardX = (virtualWidth_ - cardW) * 0.5f;
 
-    DrawText("RECORDS", static_cast<int>(cardX), 28, 26, GOLD);
-    Rectangle tabSp  = { (virtualWidth_ - 392.0f) * 0.5f, 24.0f, 190.0f, 34.0f };
-    Rectangle tabCar = { (virtualWidth_ - 392.0f) * 0.5f + 202.0f, 24.0f, 190.0f, 34.0f };
-    DrawRectangleRec(tabSp, Color{ 20, 28, 46, 245 });
-    DrawRectangleLinesEx(tabSp, 1.5f, MAGENTA);
-    int spw = MeasureText("SKILL POINTS", 14);
-    DrawText("SKILL POINTS", static_cast<int>(tabSp.x + (tabSp.width - spw) * 0.5f), 34, 14, WHITE);
-    DrawRectangleRec(tabCar, GOLD);
-    DrawRectangleLinesEx(tabCar, 1.5f, WHITE);
-    int crw = MeasureText("CAREER", 14);
-    DrawText("CAREER", static_cast<int>(tabCar.x + (tabCar.width - crw) * 0.5f), 34, 14, BLACK);
-    if (IsButtonClicked(tabSp)) { SetScreenMode(ScreenMode::SKILL_POINTS_VIEW); audio_.PlayUiClick(); return; }
+    DrawText("RECORDS", static_cast<int>(cardX), 21, 26, GOLD);
+    {
+        const char* names[3] = { "BOUNTIES", "SKILL POINTS", "CAREER" };
+        Color cols[3] = { ORANGE, MAGENTA, GOLD };
+        float startX = (virtualWidth_ - 540.0f) * 0.5f;
+        for (int t = 0; t < 3; ++t) {
+            Rectangle tr = { startX + t * 184.0f, 17.0f, 172.0f, 34.0f };
+            bool act = (t == 2);
+            DrawRectangleRec(tr, act ? cols[t] : Color{ 20, 28, 46, 245 });
+            DrawRectangleLinesEx(tr, 1.5f, act ? WHITE : cols[t]);
+            int nw = MeasureText(names[t], 14);
+            DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), 27, 14, act ? BLACK : WHITE);
+            if (!act && IsButtonClicked(tr)) {
+                SetScreenMode(t == 0 ? ScreenMode::BOUNTIES_VIEW : ScreenMode::SKILL_POINTS_VIEW);
+                audio_.PlayUiClick();
+                return;
+            }
+        }
+    }
 
     char boltBuf[128];
     std::snprintf(boltBuf, sizeof(boltBuf), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
     int bbw = MeasureText(boltBuf, 18);
-    DrawText(boltBuf, static_cast<int>(cardX + cardW - bbw), 28, 18, SKYBLUE);
+    DrawText(boltBuf, static_cast<int>(cardX + cardW - bbw), 25, 18, SKYBLUE);
 
     DrawLine(static_cast<int>(cardX), 68, static_cast<int>(cardX + cardW), 68, { 255, 255, 255, 55 });
 
@@ -4089,28 +4111,141 @@ void RailGame::RenderCareerStats2D() {
     }
 }
 
+void RailGame::RenderBounties2D() {
+    RefreshDailyContracts();
+    DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 720, { 8, 12, 24, 238 });
+
+    float bW = 1160.0f;
+    float bX = (virtualWidth_ - bW) * 0.5f;
+
+    DrawText("RECORDS", static_cast<int>(bX), 21, 26, GOLD);
+    {
+        const char* names[3] = { "BOUNTIES", "SKILL POINTS", "CAREER" };
+        Color cols[3] = { ORANGE, MAGENTA, GOLD };
+        float startX = (virtualWidth_ - 540.0f) * 0.5f;
+        for (int t = 0; t < 3; ++t) {
+            Rectangle tr = { startX + t * 184.0f, 17.0f, 172.0f, 34.0f };
+            bool act = (t == 0);
+            DrawRectangleRec(tr, act ? cols[t] : Color{ 20, 28, 46, 245 });
+            DrawRectangleLinesEx(tr, 1.5f, act ? WHITE : cols[t]);
+            int nw = MeasureText(names[t], 14);
+            DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), 27, 14, act ? BLACK : WHITE);
+            if (!act && IsButtonClicked(tr)) {
+                SetScreenMode(t == 1 ? ScreenMode::SKILL_POINTS_VIEW : ScreenMode::STATS_VIEW);
+                audio_.PlayUiClick();
+                return;
+            }
+        }
+    }
+
+    char boltBuf[128];
+    std::snprintf(boltBuf, sizeof(boltBuf), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
+    int bbw = MeasureText(boltBuf, 18);
+    DrawText(boltBuf, static_cast<int>(bX + bW - bbw), 25, 18, SKYBLUE);
+    DrawLine(static_cast<int>(bX), 68, static_cast<int>(bX + bW), 68, { 255, 255, 255, 55 });
+
+    DrawText("DAILY DREADZONE CONTRACTS (RESETS EVERY 24H  •  2x PROGRESS IN DAILY MODE)", static_cast<int>(bX), 82, 15, GOLD);
+
+    for (size_t i = 0; i < NUM_DAILY_CONTRACTS; ++i) {
+        const auto& def = GetContractDef(save_.dailyContractIds[i]);
+        int prog = save_.dailyContractProg[i];
+        bool done = save_.dailyContractDone[i];
+        Rectangle r = { bX, 110.0f + i * 114.0f, bW, 102.0f };
+
+        DrawRectangleRec(r, done ? Color{ 20, 44, 36, 240 } : Color{ 16, 22, 36, 230 });
+        DrawRectangleLinesEx(r, done ? 2.2f : 1.6f, done ? GREEN : (prog > 0 ? SKYBLUE : GRAY));
+        DrawRectangle(static_cast<int>(r.x), static_cast<int>(r.y), 6, static_cast<int>(r.height), done ? GREEN : ORANGE);
+
+        DrawText(def.title, static_cast<int>(r.x + 22), static_cast<int>(r.y + 14), 20, done ? GREEN : GOLD);
+        DrawText(def.description, static_cast<int>(r.x + 22), static_cast<int>(r.y + 42), 15, LIGHTGRAY);
+
+        float ratio = std::clamp(static_cast<float>(prog) / static_cast<float>(std::max(1, def.targetCount)), 0.0f, 1.0f);
+        Rectangle bar = { r.x + 22.0f, r.y + 72.0f, 520.0f, 14.0f };
+        DrawRectangleRec(bar, { 28, 36, 52, 255 });
+        DrawRectangle(static_cast<int>(bar.x), static_cast<int>(bar.y), static_cast<int>(bar.width * ratio), static_cast<int>(bar.height), done ? GREEN : SKYBLUE);
+        DrawRectangleLinesEx(bar, 1.0f, { 120, 155, 195, 140 });
+
+        char pTxt[48];
+        std::snprintf(pTxt, sizeof(pTxt), "%d / %d", prog, def.targetCount);
+        DrawText(pTxt, static_cast<int>(bar.x + bar.width + 16.0f), static_cast<int>(bar.y), 14, WHITE);
+
+        Rectangle rewBadge = { r.x + bW - 255.0f, r.y + 26.0f, 235.0f, 50.0f };
+        DrawRectangleRec(rewBadge, done ? Color{ 26, 68, 44, 240 } : Color{ 22, 32, 52, 235 });
+        DrawRectangleLinesEx(rewBadge, 1.5f, done ? GREEN : GOLD);
+        char rTxt[64];
+        if (done) {
+            std::snprintf(rTxt, sizeof(rTxt), "COMPLETED (+%dB, +%dR)", def.boltReward, def.rariReward);
+        } else {
+            std::snprintf(rTxt, sizeof(rTxt), "+%d BOLTS  •  +%d RARI", def.boltReward, def.rariReward);
+        }
+        int rw = MeasureText(rTxt, 14);
+        DrawText(rTxt, static_cast<int>(rewBadge.x + (rewBadge.width - rw) * 0.5f), static_cast<int>(rewBadge.y + 18.0f), 14, done ? GREEN : GOLD);
+    }
+
+    // Today's Daily Mutator Spotlight Strip at bottom
+    const auto& mDef = GetMutatorCatalog()[static_cast<int>(GetTodaysMutator())];
+    Rectangle mutRec = { bX, 462.0f, bW, 104.0f };
+    DrawRectangleRec(mutRec, { 14, 20, 36, 235 });
+    DrawRectangleLinesEx(mutRec, 2.0f, GOLD);
+    char mHdr[96];
+    std::snprintf(mHdr, sizeof(mHdr), "TODAY'S DAILY ARENA MUTATOR: %s", mDef.name);
+    DrawText(mHdr, static_cast<int>(mutRec.x + 20), static_cast<int>(mutRec.y + 14), 18, GOLD);
+    DrawText(mDef.hazardDesc, static_cast<int>(mutRec.x + 20), static_cast<int>(mutRec.y + 44), 14, ORANGE);
+    DrawText(mDef.perkDesc, static_cast<int>(mutRec.x + 20), static_cast<int>(mutRec.y + 68), 14, GREEN);
+
+    Rectangle playDailyBtn = { mutRec.x + bW - 235.0f, mutRec.y + 26.0f, 215.0f, 52.0f };
+    bool pdHov = IsRectHovered(playDailyBtn);
+    DrawRectangleRec(playDailyBtn, pdHov ? Color{ 145, 95, 22, 245 } : Color{ 88, 56, 16, 235 });
+    DrawRectangleLinesEx(playDailyBtn, 2.0f, GOLD);
+    int pdw = MeasureText("LAUNCH DAILY", 16);
+    DrawText("LAUNCH DAILY", static_cast<int>(playDailyBtn.x + (playDailyBtn.width - pdw) * 0.5f), static_cast<int>(playDailyBtn.y + 18.0f), 16, WHITE);
+    if (IsButtonClicked(playDailyBtn)) {
+        menuSelectDaily_ = true;
+        StartNewRun(true);
+        return;
+    }
+
+    DrawLine(static_cast<int>(bX), 580, static_cast<int>(bX + bW), 580, { 255, 255, 255, 45 });
+    Rectangle backBtn = { bX, 600.0f, 220.0f, 48.0f };
+    DrawRectangleRec(backBtn, IsRectHovered(backBtn) ? Color{ 45, 68, 100, 255 } : Color{ 24, 36, 56, 255 });
+    DrawRectangleLinesEx(backBtn, 2.0f, ORANGE);
+    int sbw = MeasureText("< BACK TO MENU", 16);
+    DrawText("< BACK TO MENU", static_cast<int>(backBtn.x + (backBtn.width - sbw) * 0.5f), static_cast<int>(backBtn.y + 16), 16, WHITE);
+    if (IsButtonClicked(backBtn)) {
+        SetScreenMode(ScreenMode::MAIN_MENU);
+        audio_.PlayUiClick();
+    }
+}
+
 void RailGame::RenderSkillPoints2D() {
     DrawRectangle(0, 0, static_cast<int>(virtualWidth_), 720, { 8, 12, 24, 235 });
 
     float spW = 1160.0f;
     float spX = (virtualWidth_ - spW) * 0.5f;
 
-    DrawText("RECORDS", static_cast<int>(spX), 28, 26, GOLD);
-    Rectangle tabSp  = { (virtualWidth_ - 392.0f) * 0.5f, 24.0f, 190.0f, 34.0f };
-    Rectangle tabCar = { (virtualWidth_ - 392.0f) * 0.5f + 202.0f, 24.0f, 190.0f, 34.0f };
-    DrawRectangleRec(tabSp, MAGENTA);
-    DrawRectangleLinesEx(tabSp, 1.5f, WHITE);
-    int spw = MeasureText("SKILL POINTS", 14);
-    DrawText("SKILL POINTS", static_cast<int>(tabSp.x + (tabSp.width - spw) * 0.5f), 34, 14, BLACK);
-    DrawRectangleRec(tabCar, Color{ 20, 28, 46, 245 });
-    DrawRectangleLinesEx(tabCar, 1.5f, GOLD);
-    int crw = MeasureText("CAREER", 14);
-    DrawText("CAREER", static_cast<int>(tabCar.x + (tabCar.width - crw) * 0.5f), 34, 14, WHITE);
-    if (IsButtonClicked(tabCar)) { SetScreenMode(ScreenMode::STATS_VIEW); audio_.PlayUiClick(); return; }
+    DrawText("RECORDS", static_cast<int>(spX), 21, 26, GOLD);
+    {
+        const char* names[3] = { "BOUNTIES", "SKILL POINTS", "CAREER" };
+        Color cols[3] = { ORANGE, MAGENTA, GOLD };
+        float startX = (virtualWidth_ - 540.0f) * 0.5f;
+        for (int t = 0; t < 3; ++t) {
+            Rectangle tr = { startX + t * 184.0f, 17.0f, 172.0f, 34.0f };
+            bool act = (t == 1);
+            DrawRectangleRec(tr, act ? cols[t] : Color{ 20, 28, 46, 245 });
+            DrawRectangleLinesEx(tr, 1.5f, act ? WHITE : cols[t]);
+            int nw = MeasureText(names[t], 14);
+            DrawText(names[t], static_cast<int>(tr.x + (tr.width - nw) * 0.5f), 27, 14, act ? BLACK : WHITE);
+            if (!act && IsButtonClicked(tr)) {
+                SetScreenMode(t == 0 ? ScreenMode::BOUNTIES_VIEW : ScreenMode::STATS_VIEW);
+                audio_.PlayUiClick();
+                return;
+            }
+        }
+    }
     char boltBuf[128];
     std::snprintf(boltBuf, sizeof(boltBuf), "BOLTS: %d   |   RARITANIUM: %d", save_.bolts, save_.raritanium);
     int bbw = MeasureText(boltBuf, 18);
-    DrawText(boltBuf, static_cast<int>(spX + spW - bbw), 28, 18, SKYBLUE);
+    DrawText(boltBuf, static_cast<int>(spX + spW - bbw), 25, 18, SKYBLUE);
     DrawLine(static_cast<int>(spX), 68, static_cast<int>(spX + spW), 68, { 255, 255, 255, 55 });
 
     const auto& cat = GetSkillPointCatalog();
@@ -4274,21 +4409,28 @@ void RailGame::RenderSkillToast2D() const {
 }
 
 void RailGame::RenderRadioComm2D() const {
-    if (!radioComm_.active || radioComm_.timer <= 0.0f) return;
+    bool isDare = activeDare_.active && activeDare_.timer > 0.0f;
+    if (!isDare && (!radioComm_.active || radioComm_.timer <= 0.0f)) return;
 
-    float alpha = std::clamp(radioComm_.timer / 0.4f, 0.0f, 1.0f);
-    if (radioComm_.timer > radioComm_.maxTimer - 0.4f) {
-        alpha = std::clamp((radioComm_.maxTimer - radioComm_.timer) / 0.4f, 0.0f, 1.0f);
+    float curTimer = isDare ? activeDare_.timer : radioComm_.timer;
+    float curMax   = isDare ? activeDare_.maxTimer : radioComm_.maxTimer;
+    CommSpeaker spk = isDare ? activeDare_.speaker : radioComm_.speaker;
+    const std::string& spkName = isDare ? activeDare_.speakerName : radioComm_.speakerName;
+    const std::string& bodyTxt = isDare ? activeDare_.prompt : radioComm_.text;
+
+    float alpha = std::clamp(curTimer / 0.4f, 0.0f, 1.0f);
+    if (curTimer > curMax - 0.35f) {
+        alpha = std::clamp((curMax - curTimer) / 0.35f, 0.0f, 1.0f);
     }
     unsigned char aByte = static_cast<unsigned char>(alpha * 240.0f);
 
-    float boxW = 580.0f;
-    float boxH = 92.0f;
+    float boxW = 600.0f;
+    float boxH = isDare ? 100.0f : 92.0f;
     float boxX = (virtualWidth_ - boxW) * 0.5f;
     float boxY = 82.0f;
 
-    Color borderCol = (radioComm_.speaker == CommSpeaker::DR_NEFARIOUS) ? Color{ 210, 60, 255, aByte } :
-                      (radioComm_.speaker == CommSpeaker::CLANK) ? Color{ 60, 235, 110, aByte } : Color{ 255, 185, 45, aByte };
+    Color borderCol = (spk == CommSpeaker::DR_NEFARIOUS) ? Color{ 210, 60, 255, aByte } :
+                      (spk == CommSpeaker::CLANK) ? Color{ 60, 235, 110, aByte } : Color{ 255, 185, 45, aByte };
 
     // Holographic Translucent Backplate
     DrawRectangle(static_cast<int>(boxX), static_cast<int>(boxY), static_cast<int>(boxW), static_cast<int>(boxH), Color{ 10, 16, 28, aByte });
@@ -4305,13 +4447,13 @@ void RailGame::RenderRadioComm2D() const {
     DrawRectangleLinesEx(avRec, 1.5f, borderCol);
 
     // Procedural Avatar Glyphs
-    if (radioComm_.speaker == CommSpeaker::CAPTAIN_QWARK) {
+    if (spk == CommSpeaker::CAPTAIN_QWARK) {
         Vector2 c = { avRec.x + 36.0f, avRec.y + 36.0f };
         DrawCircle(static_cast<int>(c.x), static_cast<int>(c.y), 22.0f, Color{ 40, 140, 60, aByte });
         DrawCircleLines(static_cast<int>(c.x), static_cast<int>(c.y), 22.0f, GOLD);
         DrawTriangle({ c.x, c.y - 14.0f }, { c.x - 12.0f, c.y + 10.0f }, { c.x + 12.0f, c.y + 10.0f }, GOLD);
         DrawText("Q", static_cast<int>(c.x - 7), static_cast<int>(c.y - 6), 18, BLACK);
-    } else if (radioComm_.speaker == CommSpeaker::DR_NEFARIOUS) {
+    } else if (spk == CommSpeaker::DR_NEFARIOUS) {
         Vector2 c = { avRec.x + 36.0f, avRec.y + 36.0f };
         DrawRectangle(static_cast<int>(c.x - 18), static_cast<int>(c.y - 16), 36, 32, Color{ 90, 35, 125, aByte });
         DrawRectangleLines(static_cast<int>(c.x - 18), static_cast<int>(c.y - 16), 36, 32, borderCol);
@@ -4328,12 +4470,29 @@ void RailGame::RenderRadioComm2D() const {
         DrawCircle(static_cast<int>(c.x), static_cast<int>(c.y - 28), 3.0f, RED);
     }
 
-    char hdr[64];
-    std::snprintf(hdr, sizeof(hdr), "%s // COMM FREQ 142.8", radioComm_.speakerName.c_str());
-    DrawText(hdr, static_cast<int>(boxX + 94), static_cast<int>(boxY + 12), 15, borderCol);
+    char hdr[112];
+    if (isDare) {
+        const char* unit = (activeDare_.dareType == 1) ? "m" : "";
+        std::snprintf(hdr, sizeof(hdr), "%s // %s  [%d/%d%s  •  %.1fs]",
+                      spkName.c_str(), activeDare_.title.c_str(),
+                      activeDare_.progress, activeDare_.target, unit, activeDare_.timer);
+    } else {
+        std::snprintf(hdr, sizeof(hdr), "%s // COMM FREQ 142.8", spkName.c_str());
+    }
+    DrawText(hdr, static_cast<int>(boxX + 94), static_cast<int>(boxY + 11), 14, isDare ? GOLD : borderCol);
 
-    DrawTextWrapped(radioComm_.text.c_str(), static_cast<int>(boxX + 94), static_cast<int>(boxY + 34),
+    DrawTextWrapped(bodyTxt.c_str(), static_cast<int>(boxX + 94), static_cast<int>(boxY + 32),
                     static_cast<int>(boxW - 106), 14, 18, WHITE);
+
+    if (isDare) {
+        float pRatio = std::clamp(static_cast<float>(activeDare_.progress) / static_cast<float>(std::max(1, activeDare_.target)), 0.0f, 1.0f);
+        float tRatio = std::clamp(activeDare_.timer / std::max(0.1f, activeDare_.maxTimer), 0.0f, 1.0f);
+        int barX = static_cast<int>(boxX + 94);
+        int barW = static_cast<int>(boxW - 108);
+        DrawRectangle(barX, static_cast<int>(boxY + 80), barW, 8, Color{ 24, 32, 48, aByte });
+        DrawRectangle(barX, static_cast<int>(boxY + 80), static_cast<int>(barW * pRatio), 5, Color{ 60, 235, 120, aByte });
+        DrawRectangle(barX, static_cast<int>(boxY + 86), static_cast<int>(barW * tRatio), 2, Color{ 255, 200, 50, aByte });
+    }
 }
 
 } // namespace Railfinity
