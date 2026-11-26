@@ -936,6 +936,30 @@ void RailGame::RenderHazards3D() const {
                 RenderRaritaniumCrystal3D({ lx, ry + 0.82f * s, h.z }, h.animPhase * 45.0f, 1.28f * s);
                 break;
             }
+            case HazardKind::AMMO_CRATE: {
+                // Iconic Gadgetron Steel & Safety-Orange/Yellow Ammo Crate with rotating brass energy shells
+                Vector3 cPos = { lx, ry + 0.85f * s, h.z };
+                DrawCube(cPos, 1.44f * s, 1.44f * s, 1.44f * s, { 42, 48, 58, 255 });
+                DrawCube(cPos, 1.50f * s, 0.34f * s, 1.50f * s, { 255, 165, 25, 255 });
+                DrawCube(cPos, 0.34f * s, 1.50f * s, 1.50f * s, { 255, 165, 25, 255 });
+                for (int dx = -1; dx <= 1; dx += 2) {
+                    for (int dz = -1; dz <= 1; dz += 2) {
+                        DrawCube({ lx + dx * 0.68f * s, ry + 0.85f * s, h.z + dz * 0.68f * s },
+                                 0.20f * s, 1.56f * s, 0.20f * s, { 255, 215, 70, 255 });
+                    }
+                }
+                DrawCubeWires(cPos, 1.58f * s, 1.58f * s, 1.58f * s, ORANGE);
+                float bob = std::sin(h.animPhase * 2.4f) * 0.10f * s;
+                for (int sh = -1; sh <= 1; ++sh) {
+                    float a = h.animPhase * 2.2f + sh * 2.094f;
+                    Vector3 sBot = { lx + std::cos(a) * 0.32f * s, ry + 1.82f * s + bob, h.z + std::sin(a) * 0.32f * s };
+                    Vector3 sTop = { sBot.x, sBot.y + 0.38f * s, sBot.z };
+                    Vector3 sTip = { sBot.x, sBot.y + 0.54f * s, sBot.z };
+                    DrawCylinderEx(sBot, sTop, 0.11f * s, 0.11f * s, 6, GOLD);
+                    DrawCylinderEx(sTop, sTip, 0.11f * s, 0.02f * s, 6, { 255, 110, 25, 255 });
+                }
+                break;
+            }
             case HazardKind::TNT_CRATE: {
                 float pulse = (1.0f + std::sin(h.animPhase * 4.0f) * 0.06f) * s;
                 Vector3 bot = { lx, ry, h.z };
@@ -2774,6 +2798,9 @@ void RailGame::RenderHud2D() {
             } else if (h.kind == HazardKind::RARITANIUM_CACHE) {
                 tag = "+RARITANIUM";
                 tagCol = SKYBLUE;
+            } else if (h.kind == HazardKind::AMMO_CRATE) {
+                tag = "+AMMO";
+                tagCol = GOLD;
             } else if (h.kind == HazardKind::MAGMA_GEYSER && h.lane == player_.currentLane) {
                 tag = "! MAGMA GEYSER !";
                 tagCol = ORANGE;
@@ -2861,15 +2888,29 @@ void RailGame::RenderHud2D() {
         DrawRectangleLines(static_cast<int>(bx), 52, static_cast<int>(bw), 16, WHITE);
     }
 
-    // Bottom-Right Quick-Select Weapon Hotbar (1..6)
+    // Bottom-Right Quick-Select Weapon Hotbar (1..6) + Ammo Pickup Callout
     const auto& weaps = GetWeaponCatalog();
+    if (ammoPickupTimer_ > 0.0f && !ammoPickupText_.empty()) {
+        float alphaFrac = std::clamp(ammoPickupTimer_ / 0.45f, 0.0f, 1.0f);
+        unsigned char bgA = static_cast<unsigned char>(215 * alphaFrac);
+        unsigned char fgA = static_cast<unsigned char>(255 * alphaFrac);
+        int tw = MeasureText(ammoPickupText_.c_str(), 14);
+        int pillW = tw + 24;
+        int pillX = static_cast<int>(virtualWidth_ - 28.0f) - pillW;
+        int pillY = static_cast<int>(720.0f - 118.0f);
+        DrawRectangle(pillX, pillY, pillW, 26, Color{ 12, 18, 32, bgA });
+        DrawRectangleLines(pillX, pillY, pillW, 26, Color{ ammoPickupColor_.r, ammoPickupColor_.g, ammoPickupColor_.b, fgA });
+        DrawText(ammoPickupText_.c_str(), pillX + 12, pillY + 6, 14, Color{ ammoPickupColor_.r, ammoPickupColor_.g, ammoPickupColor_.b, fgA });
+    }
     for (int w = 0; w < static_cast<int>(NUM_WEAPONS); ++w) {
         Rectangle sr = { virtualWidth_ - 418.0f + w * 66.0f, 720.0f - 84.0f, 60.0f, 64.0f };
         bool unlocked = save_.unlockedWeapons[w];
         bool equipped = (save_.equippedWeapon == w);
+        bool restockPulse = (ammoPickupTimer_ > 1.4f && ammoPickupSlot_ == w);
 
-        DrawRectangleRec(sr, equipped ? Color{ 45, 68, 105, 240 } : Color{ 16, 22, 36, 210 });
-        DrawRectangleLinesEx(sr, equipped ? 2.5f : 1.5f, equipped ? GOLD : (unlocked ? weaps[w].projectileColor : DARKGRAY));
+        DrawRectangleRec(sr, equipped ? Color{ 45, 68, 105, 240 } : (restockPulse ? Color{ 48, 56, 32, 235 } : Color{ 16, 22, 36, 210 }));
+        DrawRectangleLinesEx(sr, (equipped || restockPulse) ? 2.5f : 1.5f,
+                             restockPulse ? WHITE : (equipped ? GOLD : (unlocked ? weaps[w].projectileColor : DARKGRAY)));
 
         char keyTxt[16];
         std::snprintf(keyTxt, sizeof(keyTxt), "[%d]", w + 1);

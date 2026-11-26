@@ -105,7 +105,8 @@ enum class HazardKind : int {
     HOVER_TAXI = 12,        // Corson V: Cyberpunk neon flying taxi weaving through lanes
     PIRANHA_LEAP = 13,      // Pokitaru: Leaping razor-tooth cyber-piranha predator
     SWINGING_CRANE_SCRAP = 14,// Torren IV: Magnetic overhead crane swinging rusty debris
-    SWINGSHOT_NODE = 15     // Green Versa-Fuse Grapple Node for cinematic leaps!
+    SWINGSHOT_NODE = 15,    // Green Versa-Fuse Grapple Node for cinematic leaps!
+    AMMO_CRATE = 16         // Scarce Gadgetron steel/orange ammo crate (rolls random arsenal ammo)
 };
 
 struct WeaponDef {
@@ -412,8 +413,8 @@ struct PlayerLombax {
     float laneSwitchCooldown = 0.0f;
     int bufferedLaneDelta = 0;
     float bufferedLaneTimer = 0.0f;
-    std::array<int, NUM_WEAPONS> weaponAmmo = { 999, 45, 24, 30, 18, 20 };
-    std::array<int, NUM_WEAPONS> weaponMaxAmmo = { 999, 45, 24, 30, 18, 20 };
+    std::array<int, NUM_WEAPONS> weaponAmmo = { 999, 32, 16, 22, 12, 14 };
+    std::array<int, NUM_WEAPONS> weaponMaxAmmo = { 999, 32, 16, 22, 12, 14 };
 
     bool grounded = true;
     bool heliGliding = false;

@@ -720,7 +720,10 @@ void RailGame::StartNewRun(bool dailySeed) {
     player_.heliFuel = player_.maxHeliFuel;
     player_.multiplierTier = 1;
     player_.multiplierProgress = 0.0f;
-    static constexpr std::array<int, NUM_WEAPONS> BASE_AMMO = { 999, 45, 24, 30, 18, 20 };
+    ammoPickupTimer_ = 0.0f;
+    ammoPickupSlot_ = -1;
+    ammoPickupText_.clear();
+    static constexpr std::array<int, NUM_WEAPONS> BASE_AMMO = { 999, 32, 16, 22, 12, 14 };
     for (int w = 0; w < static_cast<int>(NUM_WEAPONS); ++w) {
         if (w == 0) {
             player_.weaponMaxAmmo[w] = 999;
@@ -985,31 +988,108 @@ void RailGame::CycleEquippedWeapon(int delta) {
 
 void RailGame::GrantWeaponAmmo(int percent, bool allGuns) {
     if (allGuns) {
+        bool anyRestocked = false;
         for (int w = 1; w < static_cast<int>(NUM_WEAPONS); ++w) {
             if (!save_.unlockedWeapons[w]) continue;
-            int add = std::max(1, (player_.weaponMaxAmmo[w] * percent) / 100);
-            player_.weaponAmmo[w] = std::min(player_.weaponMaxAmmo[w], player_.weaponAmmo[w] + add);
+            if (player_.weaponAmmo[w] < player_.weaponMaxAmmo[w]) {
+                int add = std::max(1, (player_.weaponMaxAmmo[w] * percent) / 100);
+                player_.weaponAmmo[w] = std::min(player_.weaponMaxAmmo[w], player_.weaponAmmo[w] + add);
+                anyRestocked = true;
+            }
+        }
+        if (anyRestocked) {
+            ammoPickupText_ = "BOSS SUPPLY // +AMMO TO ARSENAL";
+            ammoPickupColor_ = GOLD;
+            ammoPickupTimer_ = 2.6f;
+            ammoPickupSlot_ = -1;
         }
         return;
     }
-    int target = -1;
-    int eq = save_.equippedWeapon;
-    if (eq > 0 && save_.unlockedWeapons[eq] && player_.weaponAmmo[eq] < player_.weaponMaxAmmo[eq]) {
-        target = eq;
-    } else {
-        float lowestFrac = 1.0f;
-        for (int w = 1; w < static_cast<int>(NUM_WEAPONS); ++w) {
-            if (!save_.unlockedWeapons[w]) continue;
+
+    std::vector<int> unlockedGuns;
+    for (int w = 1; w < static_cast<int>(NUM_WEAPONS); ++w) {
+        if (save_.unlockedWeapons[w]) unlockedGuns.push_back(w);
+    }
+    if (unlockedGuns.empty()) return;
+
+    auto pickWeightedNeedy = [&](const std::vector<int>& pool) -> int {
+        float totalW = 0.0f;
+        for (int w : pool) {
             float frac = static_cast<float>(player_.weaponAmmo[w]) / static_cast<float>(std::max(1, player_.weaponMaxAmmo[w]));
-            if (frac < lowestFrac) {
-                lowestFrac = frac;
-                target = w;
+            totalW += std::max(0.25f, 1.35f - frac);
+        }
+        if (totalW <= 0.0f) return pool[0];
+        float roll = rng_.RangeFloat(0.0f, totalW);
+        float acc = 0.0f;
+        for (int w : pool) {
+            float frac = static_cast<float>(player_.weaponAmmo[w]) / static_cast<float>(std::max(1, player_.weaponMaxAmmo[w]));
+            acc += std::max(0.25f, 1.35f - frac);
+            if (roll <= acc) return w;
+        }
+        return pool.back();
+    };
+
+    int eq = save_.equippedWeapon;
+    int target = -1;
+    bool overcapFullOther = false;
+
+    // When 2+ firearms are unlocked and holding a firearm, 80% of drops roll for OTHER weapons to incentivize switching!
+    if (eq > 0 && unlockedGuns.size() >= 2 && rng_.Chance(0.80f)) {
+        std::vector<int> needyOthers;
+        std::vector<int> allOthers;
+        for (int w : unlockedGuns) {
+            if (w == eq) continue;
+            allOthers.push_back(w);
+            if (player_.weaponAmmo[w] < player_.weaponMaxAmmo[w]) {
+                needyOthers.push_back(w);
             }
         }
+        if (!needyOthers.empty()) {
+            target = pickWeightedNeedy(needyOthers);
+        } else if (!allOthers.empty() && rng_.Chance(0.75f)) {
+            // Other unlocked firearms are sitting at 100% full — roll one of them anyway (+1 overcharge)
+            // so spamming a single gun doesn't guarantee self-ammo refills!
+            target = allOthers[rng_.RangeInt(0, static_cast<int>(allOthers.size()) - 1)];
+            overcapFullOther = true;
+        }
     }
+
+    if (target < 0) {
+        std::vector<int> needyAll;
+        for (int w : unlockedGuns) {
+            if (player_.weaponAmmo[w] < player_.weaponMaxAmmo[w]) needyAll.push_back(w);
+        }
+        if (!needyAll.empty()) {
+            target = pickWeightedNeedy(needyAll);
+        } else {
+            target = unlockedGuns[rng_.RangeInt(0, static_cast<int>(unlockedGuns.size()) - 1)];
+            overcapFullOther = true;
+        }
+    }
+
     if (target > 0) {
-        int add = std::max(1, (player_.weaponMaxAmmo[target] * percent) / 100);
-        player_.weaponAmmo[target] = std::min(player_.weaponMaxAmmo[target], player_.weaponAmmo[target] + add);
+        char buf[96];
+        if (overcapFullOther) {
+            int overCap = player_.weaponMaxAmmo[target] + 2;
+            int before = player_.weaponAmmo[target];
+            player_.weaponAmmo[target] = std::min(overCap, player_.weaponAmmo[target] + 1);
+            int gained = player_.weaponAmmo[target] - before;
+            if (gained > 0) {
+                std::snprintf(buf, sizeof(buf), "+%d %s (MAX - SWITCH!)", gained, WEAPON_CATALOG[target].name);
+            } else {
+                std::snprintf(buf, sizeof(buf), "%s FULL! [SWITCH GUNS]", WEAPON_CATALOG[target].name);
+            }
+        } else {
+            int add = std::max(1, (player_.weaponMaxAmmo[target] * percent) / 100);
+            int before = player_.weaponAmmo[target];
+            player_.weaponAmmo[target] = std::min(player_.weaponMaxAmmo[target], player_.weaponAmmo[target] + add);
+            int gained = std::max(1, player_.weaponAmmo[target] - before);
+            std::snprintf(buf, sizeof(buf), "+%d %s AMMO", gained, WEAPON_CATALOG[target].name);
+        }
+        ammoPickupText_ = buf;
+        ammoPickupColor_ = WEAPON_CATALOG[target].projectileColor;
+        ammoPickupTimer_ = 2.4f;
+        ammoPickupSlot_ = target;
     }
 }
 
@@ -1018,9 +1098,28 @@ void RailGame::TriggerFireWeapon() {
 
     int wIdx = save_.equippedWeapon;
     if (wIdx > 0 && player_.weaponAmmo[wIdx] <= 0) {
-        // Out of ammo: auto-fallback to unlimited OmniWrench 8000 so player can smash crates!
-        save_.equippedWeapon = 0;
-        wIdx = 0;
+        // Out of ammo on active gun: auto-switch to next loaded firearm if available, or OmniWrench if all guns are dry!
+        int nextLoaded = 0;
+        for (int step = 1; step < static_cast<int>(NUM_WEAPONS); ++step) {
+            int cand = 1 + ((wIdx - 1 + step) % (static_cast<int>(NUM_WEAPONS) - 1));
+            if (cand != wIdx && save_.unlockedWeapons[cand] && player_.weaponAmmo[cand] > 0) {
+                nextLoaded = cand;
+                break;
+            }
+        }
+        save_.equippedWeapon = nextLoaded;
+        wIdx = nextLoaded;
+        audio_.PlayUiClick();
+        if (nextLoaded > 0) {
+            ammoPickupText_ = std::string("EMPTY! -> ") + WEAPON_CATALOG[nextLoaded].name;
+            ammoPickupColor_ = WEAPON_CATALOG[nextLoaded].projectileColor;
+            ammoPickupSlot_ = nextLoaded;
+        } else {
+            ammoPickupText_ = "ARSENAL DRY! -> OMNIWRENCH";
+            ammoPickupColor_ = SKYBLUE;
+            ammoPickupSlot_ = 0;
+        }
+        ammoPickupTimer_ = 2.2f;
     }
     if (wIdx > 0) {
         player_.weaponAmmo[wIdx] = std::max(0, player_.weaponAmmo[wIdx] - 1);
@@ -1269,9 +1368,17 @@ void RailGame::SpawnChunkPattern(float startZ) {
     float worldZ = totalWorldTravel_ + startZ;
     int minLane = GetCorridorMinLaneAt(worldZ);
     std::array<int, 3> activeLanes = { minLane, minLane + 1, minLane + 2 };
+    bool hasUnlockedFirearm = false;
+    for (int w = 1; w < static_cast<int>(NUM_WEAPONS); ++w) {
+        if (save_.unlockedWeapons[w]) { hasUnlockedFirearm = true; break; }
+    }
+    float ammoCrateChance = IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 0.25f : 0.14f;
     auto CrateOrRari = [&]() -> HazardKind {
         if (IsMutatorActive(DailyMutatorId::RARITANIUM_RUSH) && rng_.Chance(0.32f)) {
             return HazardKind::RARITANIUM_CACHE;
+        }
+        if (hasUnlockedFirearm && rng_.Chance(ammoCrateChance)) {
+            return HazardKind::AMMO_CRATE;
         }
         return HazardKind::BOLT_CRATE;
     };
@@ -2118,12 +2225,15 @@ void RailGame::UpdatePlayingFixed(float dt) {
     if (distanceMeters_ >= 500.0f) AwardSkillPoint(0);  // GRIND BOOT INITIATE
     if (distanceMeters_ >= 1500.0f) AwardSkillPoint(7); // DIMENSION HOPPER
 
+    if (ammoPickupTimer_ > 0.0f) {
+        ammoPickupTimer_ = std::max(0.0f, ammoPickupTimer_ - dt);
+    }
+
     // Sector Transition Check
     GalaxySector curSec = GetCurrentSector();
     if (curSec != lastSector_) {
         lastSector_ = curSec;
         sectorBannerTimer_ = 3.5f;
-        GrantWeaponAmmo(50, true);
         ProgressContract(11, 1);
         if (isDailyRun_) {
             save_.raritanium += 2;
@@ -2132,7 +2242,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
             audio_.PlayRaritaniumPickup();
             toast_.active = true;
             toast_.title = "DAILY SECTOR CLEARED!";
-            toast_.subtitle = "+2 Bonus Raritanium & +50% Weapon Ammo Restocked";
+            toast_.subtitle = "+2 Bonus Raritanium Awarded";
             toast_.timer = 3.2f;
         }
         screenFlashColor_ = (curSec == GalaxySector::CORSON_V || curSec == GalaxySector::DIMENSIONATOR_RIFT) ? MAGENTA
@@ -2435,8 +2545,9 @@ void RailGame::UpdatePlayingFixed(float dt) {
             if (!other.active) continue;
             if (std::abs(other.z - tntZ) < blastZ) {
                 if (other.kind == HazardKind::BOLT_CRATE || other.kind == HazardKind::RARITANIUM_CACHE ||
-                    other.kind == HazardKind::NANOTECH_CRATE ||
+                    other.kind == HazardKind::NANOTECH_CRATE || other.kind == HazardKind::AMMO_CRATE ||
                     other.kind == HazardKind::THUG_DRONE || other.kind == HazardKind::SHIELDED_ENFORCER) {
+                    bool othAmmo = (other.kind == HazardKind::AMMO_CRATE);
                     other.active = false;
                     killedSomething = true;
                     bool othEnemy = (other.kind == HazardKind::THUG_DRONE || other.kind == HazardKind::SHIELDED_ENFORCER);
@@ -2445,6 +2556,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
                         AdvanceRadioDare(2, 1);
                     } else {
                         ProgressContract(0, 1);
+                        if (othAmmo) GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 30 : 20, false);
                     }
                     int othRari = (other.kind == HazardKind::RARITANIUM_CACHE)
                                 ? ((isDailyRun_ || distanceMeters_ >= 750.0f) ? 2 : 1)
@@ -2487,11 +2599,13 @@ void RailGame::UpdatePlayingFixed(float dt) {
             h.lane == player_.currentLane && std::abs(player_.x - GetLaneX(h.lane)) < 1.55f &&
             h.z >= -0.5f && h.z < wrenchReachZ) {
             if (h.kind == HazardKind::BOLT_CRATE || h.kind == HazardKind::RARITANIUM_CACHE ||
-                h.kind == HazardKind::NANOTECH_CRATE || h.kind == HazardKind::THUG_DRONE ||
-                h.kind == HazardKind::SHIELDED_ENFORCER) {
+                h.kind == HazardKind::NANOTECH_CRATE || h.kind == HazardKind::AMMO_CRATE ||
+                h.kind == HazardKind::THUG_DRONE || h.kind == HazardKind::SHIELDED_ENFORCER) {
                 bool isRari = (h.kind == HazardKind::RARITANIUM_CACHE);
                 bool isNano = (h.kind == HazardKind::NANOTECH_CRATE);
-                bool isEnemy = (h.kind == HazardKind::THUG_DRONE || h.kind == HazardKind::SHIELDED_ENFORCER);
+                bool isAmmo = (h.kind == HazardKind::AMMO_CRATE);
+                bool isEnforcer = (h.kind == HazardKind::SHIELDED_ENFORCER);
+                bool isEnemy = (h.kind == HazardKind::THUG_DRONE || isEnforcer);
                 h.active = false;
                 audio_.PlayWrenchSmash();
                 AdvanceMultiplier();
@@ -2504,12 +2618,18 @@ void RailGame::UpdatePlayingFixed(float dt) {
                     save_.totalEnemiesDestroyed++;
                     ProgressContract(2, 1);
                     AdvanceRadioDare(2, 1);
+                    // Melee-smashing an armored Enforcer with the OmniWrench has a 28% chance to scavenge an ammo cell!
+                    if (isEnforcer && rng_.Chance(0.28f)) {
+                        GrantWeaponAmmo(18, false);
+                    }
                     if (runKills_ >= 15) AwardSkillPoint(4);
                 } else {
                     runCrates_++;
                     save_.totalCratesSmashed++;
                     ProgressContract(0, 1);
-                    GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 50 : 30, false);
+                    if (isAmmo) {
+                        GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 35 : 25, false);
+                    }
                     if (runCrates_ >= 25) AwardSkillPoint(1); // WRENCH NINJA
                     if (isRari) AwardSkillPoint(8);           // RARITANIUM MINER
                 }
@@ -2558,10 +2678,13 @@ void RailGame::UpdatePlayingFixed(float dt) {
                     if (h.kind == HazardKind::THUG_DRONE || h.kind == HazardKind::SHIELDED_ENFORCER || h.kind == HazardKind::HOVER_TAXI) {
                         runKills_++;
                         save_.totalEnemiesDestroyed++;
-                    } else if (h.kind == HazardKind::BOLT_CRATE || h.kind == HazardKind::RARITANIUM_CACHE || h.kind == HazardKind::NANOTECH_CRATE) {
+                    } else if (h.kind == HazardKind::BOLT_CRATE || h.kind == HazardKind::RARITANIUM_CACHE ||
+                               h.kind == HazardKind::NANOTECH_CRATE || h.kind == HazardKind::AMMO_CRATE) {
                         runCrates_++;
                         save_.totalCratesSmashed++;
-                        GrantWeaponAmmo(30, false);
+                        if (h.kind == HazardKind::AMMO_CRATE) {
+                            GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 35 : 25, false);
+                        }
                     }
                     continue;
                 }
@@ -2577,7 +2700,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
                     screenFlashAlpha_ = 0.3f;
                 }
             } else if (h.kind == HazardKind::BOLT_CRATE || h.kind == HazardKind::RARITANIUM_CACHE ||
-                       h.kind == HazardKind::NANOTECH_CRATE) {
+                       h.kind == HazardKind::NANOTECH_CRATE || h.kind == HazardKind::AMMO_CRATE) {
                 if (player_.y < 2.2f) {
                     h.active = false;
                     SpawnParticleBurst3D({ GetLaneX(h.lane), 1.0f, h.z }, 16, BROWN, 2.5f, 8.5f, 0.22f, 0.35f);
@@ -2658,7 +2781,8 @@ void RailGame::UpdatePlayingFixed(float dt) {
             for (const auto& h : hazards_) {
                 if (!h.active || h.z <= p.pos.z || h.z > p.pos.z + 55.0f) continue;
                 bool destructible = (h.kind == HazardKind::BOLT_CRATE || h.kind == HazardKind::RARITANIUM_CACHE ||
-                                     h.kind == HazardKind::NANOTECH_CRATE || h.kind == HazardKind::TNT_CRATE ||
+                                     h.kind == HazardKind::NANOTECH_CRATE || h.kind == HazardKind::AMMO_CRATE ||
+                                     h.kind == HazardKind::TNT_CRATE ||
                                      h.kind == HazardKind::THUG_DRONE || h.kind == HazardKind::SHIELDED_ENFORCER);
                 if (destructible && h.z < bestZ) {
                     bestZ = h.z;
@@ -2685,7 +2809,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
             for (auto& h : hazards_) {
                 if (!h.active) continue;
                 bool destructible = (h.kind == HazardKind::BOLT_CRATE || h.kind == HazardKind::RARITANIUM_CACHE ||
-                                     h.kind == HazardKind::NANOTECH_CRATE ||
+                                     h.kind == HazardKind::NANOTECH_CRATE || h.kind == HazardKind::AMMO_CRATE ||
                                      h.kind == HazardKind::TNT_CRATE || h.kind == HazardKind::THUG_DRONE ||
                                      h.kind == HazardKind::SHIELDED_ENFORCER || h.kind == HazardKind::HOVER_TAXI ||
                                      h.kind == HazardKind::PIRANHA_LEAP);
@@ -2707,16 +2831,19 @@ void RailGame::UpdatePlayingFixed(float dt) {
                             if (!adj.active || &adj == &h) continue;
                             if (std::abs(adj.z - h.z) < 7.5f &&
                                 (adj.kind == HazardKind::THUG_DRONE || adj.kind == HazardKind::SHIELDED_ENFORCER ||
-                                 adj.kind == HazardKind::BOLT_CRATE || adj.kind == HazardKind::RARITANIUM_CACHE)) {
+                                 adj.kind == HazardKind::BOLT_CRATE || adj.kind == HazardKind::RARITANIUM_CACHE ||
+                                 adj.kind == HazardKind::AMMO_CRATE)) {
                                 adj.hp -= p.damage * 0.65f;
                                 SpawnParticleBurst3D({ GetLaneX(adj.lane), 1.2f, adj.z }, 12, SKYBLUE, 3.0f, 10.0f, 0.22f, 0.30f);
                                 if (adj.hp <= 0.0f) {
                                     bool adjRari = (adj.kind == HazardKind::RARITANIUM_CACHE);
+                                    bool adjAmmo = (adj.kind == HazardKind::AMMO_CRATE);
                                     bool adjEnemy = (adj.kind == HazardKind::THUG_DRONE || adj.kind == HazardKind::SHIELDED_ENFORCER);
                                     int adjRariDrop = adjRari
                                                     ? ((isDailyRun_ || distanceMeters_ >= 750.0f) ? 2 : 1)
                                                     : ((adjEnemy && rng_.Chance(0.20f)) ? 1 : 0);
                                     adj.active = false;
+                                    if (adjAmmo) GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 25 : 18, false);
                                     SpawnBoltShower({ GetLaneX(adj.lane), 1.2f, adj.z }, 6 + adjRariDrop, adjRariDrop);
                                 }
                             }
@@ -2728,11 +2855,13 @@ void RailGame::UpdatePlayingFixed(float dt) {
                         for (auto& ao : hazards_) {
                             if (!ao.active || &ao == &h) continue;
                             if (std::abs(ao.z - h.z) < 6.5f &&
-                                (ao.kind == HazardKind::BOLT_CRATE || ao.kind == HazardKind::THUG_DRONE ||
-                                 ao.kind == HazardKind::SHIELDED_ENFORCER)) {
+                                (ao.kind == HazardKind::BOLT_CRATE || ao.kind == HazardKind::AMMO_CRATE ||
+                                 ao.kind == HazardKind::THUG_DRONE || ao.kind == HazardKind::SHIELDED_ENFORCER)) {
                                 ao.hp -= p.damage * 0.75f;
                                 if (ao.hp <= 0.0f) {
+                                    bool aoAmmo = (ao.kind == HazardKind::AMMO_CRATE);
                                     ao.active = false;
+                                    if (aoAmmo) GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 25 : 18, false);
                                     SpawnBoltShower({ GetLaneX(ao.lane), 1.2f, ao.z }, 7, false);
                                 }
                             }
@@ -2745,6 +2874,7 @@ void RailGame::UpdatePlayingFixed(float dt) {
                                          h.kind == HazardKind::HOVER_TAXI || h.kind == HazardKind::PIRANHA_LEAP);
                         bool wasRari = (h.kind == HazardKind::RARITANIUM_CACHE);
                         bool wasNano = (h.kind == HazardKind::NANOTECH_CRATE);
+                        bool wasAmmo = (h.kind == HazardKind::AMMO_CRATE);
                         int hLane = h.lane;
                         float hZ = h.z;
                         h.active = false;
@@ -2787,7 +2917,10 @@ void RailGame::UpdatePlayingFixed(float dt) {
                                 save_.totalCratesSmashed++;
                                 ProgressContract(0, 1);
                                 AdvanceRadioDare(4, 1);
-                                GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 40 : 20, false);
+                                // Only dedicated Gadgetron AMMO_CRATEs drop ammo (Bolt Crates never refund bullets)!
+                                if (wasAmmo) {
+                                    GrantWeaponAmmo(IsMutatorActive(DailyMutatorId::ARMORED_CONVOY) ? 25 : 18, false);
+                                }
                                 if (runCrates_ >= 25) AwardSkillPoint(1); // WRENCH NINJA
                                 if (wasRari) AwardSkillPoint(8);          // RARITANIUM MINER
                             }
@@ -2804,7 +2937,8 @@ void RailGame::UpdatePlayingFixed(float dt) {
                             for (const auto& cand : hazards_) {
                                 if (!cand.active || &cand == &h || cand.z < p.pos.z - 2.0f) continue;
                                 bool candDest = (cand.kind == HazardKind::BOLT_CRATE || cand.kind == HazardKind::RARITANIUM_CACHE ||
-                                                 cand.kind == HazardKind::NANOTECH_CRATE || cand.kind == HazardKind::THUG_DRONE ||
+                                                 cand.kind == HazardKind::NANOTECH_CRATE || cand.kind == HazardKind::AMMO_CRATE ||
+                                                 cand.kind == HazardKind::THUG_DRONE ||
                                                  cand.kind == HazardKind::SHIELDED_ENFORCER);
                                 float dz = cand.z - p.pos.z;
                                 if (candDest && dz >= -1.0f && dz < bestDistZ) {
@@ -2959,6 +3093,7 @@ void RailGame::UpdateBossFixed(float dt) {
         distanceSinceBoss_ = 0.0f;
         save_.totalBossesDefeated++;
         ProgressContract(8, 1);
+        GrantWeaponAmmo(22, true); // Modest post-boss battle resupply across unlocked guns!
         if (IsMutatorActive(DailyMutatorId::DEADLOCKED_GAUNTLET)) {
             player_.nanotechHp = std::min(player_.maxNanotechHp, player_.nanotechHp + 2.0f);
             SpawnBoltShower({ player_.x, player_.y + 1.5f, 4.0f }, 6, 3);

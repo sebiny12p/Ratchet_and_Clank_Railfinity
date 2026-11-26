@@ -221,6 +221,10 @@ private:
     BossDropship boss_{};
     SkillPointToast toast_{};
     RadioCommMessage radioComm_{};
+    std::string ammoPickupText_{};
+    Color ammoPickupColor_ = GOLD;
+    float ammoPickupTimer_ = 0.0f;
+    int ammoPickupSlot_ = -1;
 
     // Object Pools
     std::array<RailHazard, MAX_HAZARDS> hazards_{};
