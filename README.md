@@ -5,7 +5,8 @@ An infinite, procedural 3D action grindrail runner built in **C++20** with **Ray
 > **Studio:** Sebiny Labs  
 > **IP Disclaimer:** Non-commercial fan tribute created for educational and portfolio purposes. *Ratchet & Clank*, *Rift Apart*, and *Before the Nexus* are registered trademarks and copyright of **Sony Interactive Entertainment LLC / Insomniac Games**.  
 > **Play Instantly in Browser:** [**▶ Launch WebAssembly Build (GitHub Pages)**](https://sebiny12p.github.io/Portfolio/play/railfinity/)  
-> **Playable Downloads:** [Download Windows `.zip` & Android `.apk` (GitHub Releases)](https://github.com/sebiny12p/Ratchet_and_Clank_Railfinity/releases)
+> **Playable Downloads:** [Download Windows `.zip` & Android `.apk` (GitHub Releases)](https://github.com/sebiny12p/Ratchet_and_Clank_Railfinity/releases)  
+> **Engineering Case Study:** [Read `ARCHITECTURE.md` (Mobile `highp` Depth Math, GLSL Facial Shader & NDK/WASM Pipeline)](ARCHITECTURE.md)
 
 ![Ratchet & Clank: Railfinity Gameplay](docs/gameplay.gif)
 
