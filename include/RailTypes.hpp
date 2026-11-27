@@ -393,6 +393,7 @@ struct SaveData {
     std::array<bool, NUM_DAILY_CONTRACTS> dailyContractDone = { false, false, false };
     int totalContractsCompleted = 0;
     int totalRadioDaresCompleted = 0;
+    int textSize = 0; // 0 = Normal (100%), 1 = Large (115%), 2 = Extra Large (125%)
 };
 
 struct PlayerLombax {

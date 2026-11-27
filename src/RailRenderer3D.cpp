@@ -14,7 +14,23 @@ Font g_uiFontBody{};
 Font g_uiFontBold{};
 Font g_uiFontHero{};
 float g_builtFontScale = 0.0f;
+int g_builtTextSizeMode = -1;
 float g_activeUiScale = 1.0f;
+int g_uiTextSizeMode = 0; // 0 = Normal, 1 = Large, 2 = Extra Large
+
+float GetAdaptiveTextScale(int fontSize, int mode = g_uiTextSizeMode) {
+    if (mode <= 0) return 1.0f;
+    if (mode == 1) {
+        if (fontSize <= 13) return 1.15f;
+        if (fontSize <= 16) return 1.09f;
+        if (fontSize <= 20) return 1.04f;
+        return 1.0f;
+    }
+    if (fontSize <= 13) return 1.25f;
+    if (fontSize <= 16) return 1.15f;
+    if (fontSize <= 20) return 1.07f;
+    return 1.0f;
+}
 
 Font LoadCrispUiFont(const std::initializer_list<const char*>& paths, int baseSize) {
     int codepoints[236];
@@ -40,32 +56,39 @@ Font LoadCrispUiFont(const std::initializer_list<const char*>& paths, int baseSi
 }
 
 const Font& PickUiFont(int fontSize) {
-    if (fontSize <= 14) return (g_uiFontSmall.texture.id != 0) ? g_uiFontSmall : g_uiFontBody;
-    if (fontSize <= 19) return g_uiFontBody;
-    if (fontSize <= 34) return (g_uiFontBold.texture.id != 0) ? g_uiFontBold : g_uiFontBody;
+    int effPx = static_cast<int>(std::round(static_cast<float>(fontSize) * GetAdaptiveTextScale(fontSize)));
+    if (effPx <= 14) return (g_uiFontSmall.texture.id != 0) ? g_uiFontSmall : g_uiFontBody;
+    if (effPx <= 19) return g_uiFontBody;
+    if (effPx <= 34) return (g_uiFontBold.texture.id != 0) ? g_uiFontBold : g_uiFontBody;
     return (g_uiFontHero.texture.id != 0) ? g_uiFontHero : g_uiFontBold;
 }
 
-int MeasureGameText(const char* text, int fontSize) {
+int MeasureGameTextScaled(const char* text, int fontSize, float customBoost) {
     if (!text || !text[0]) return 0;
     const Font& f = PickUiFont(fontSize);
-    if (f.texture.id == 0) return ::MeasureText(text, fontSize);
-    float scaledFs = static_cast<float>(fontSize) * 1.10f;
-    float spacing = std::max(0.5f, static_cast<float>(fontSize) * 0.03f);
+    float effSize = static_cast<float>(fontSize) * customBoost;
+    if (f.texture.id == 0) return ::MeasureText(text, static_cast<int>(std::round(effSize)));
+    float scaledFs = effSize * 1.10f;
+    float spacing = std::max(0.5f, effSize * 0.03f);
     Vector2 sz = MeasureTextEx(f, text, scaledFs, spacing);
     return static_cast<int>(std::ceil(sz.x));
 }
 
-void DrawGameText(const char* text, int posX, int posY, int fontSize, Color color) {
+int MeasureGameText(const char* text, int fontSize) {
+    return MeasureGameTextScaled(text, fontSize, GetAdaptiveTextScale(fontSize));
+}
+
+void DrawGameTextScaled(const char* text, int posX, int posY, int fontSize, float customBoost, Color color) {
     if (!text || !text[0]) return;
     const Font& f = PickUiFont(fontSize);
+    float effSize = static_cast<float>(fontSize) * customBoost;
     if (f.texture.id == 0) {
-        ::DrawText(text, posX, posY, fontSize, color);
+        ::DrawText(text, posX, posY, static_cast<int>(std::round(effSize)), color);
         return;
     }
     float sc = std::max(0.5f, g_activeUiScale);
-    float scaledFs = static_cast<float>(fontSize) * 1.10f;
-    float spacing = std::max(0.5f, static_cast<float>(fontSize) * 0.03f);
+    float scaledFs = effSize * 1.10f;
+    float spacing = std::max(0.5f, effSize * 0.03f);
     Vector2 pos = {
         std::round(static_cast<float>(posX) * sc) / sc,
         std::round((static_cast<float>(posY) - scaledFs * 0.06f) * sc) / sc
@@ -76,6 +99,10 @@ void DrawGameText(const char* text, int posX, int posY, int fontSize, Color colo
         DrawTextEx(f, text, { pos.x + px1, pos.y + px1 }, scaledFs, spacing, { 0, 0, 0, shA });
     }
     DrawTextEx(f, text, pos, scaledFs, spacing, color);
+}
+
+void DrawGameText(const char* text, int posX, int posY, int fontSize, Color color) {
+    DrawGameTextScaled(text, posX, posY, fontSize, GetAdaptiveTextScale(fontSize), color);
 }
 
 void DrawUpgradeBadge(Rectangle r, float globalTime) {
@@ -91,14 +118,18 @@ void DrawUpgradeBadge(Rectangle r, float globalTime) {
 
 void RailGame::RefreshUiFonts(float targetScale) {
     float clampedScale = std::clamp(targetScale, 0.75f, 4.0f);
+    int curTextMode = std::clamp(save_.textSize, 0, 2);
+    g_uiTextSizeMode = curTextMode;
     g_activeUiScale = clampedScale;
-    if (g_uiFontBody.texture.id != 0 && std::abs(clampedScale - g_builtFontScale) < 0.08f) {
+    if (g_uiFontBody.texture.id != 0 && curTextMode == g_builtTextSizeMode && std::abs(clampedScale - g_builtFontScale) < 0.08f) {
         return;
     }
     ShutdownUiFonts();
     g_builtFontScale = clampedScale;
-    int pxSmall = std::clamp(static_cast<int>(std::round(15.0f * clampedScale)), 18, 96);
-    int pxBody  = std::clamp(static_cast<int>(std::round(20.0f * clampedScale)), 24, 128);
+    g_builtTextSizeMode = curTextMode;
+    float atlasBoost = (curTextMode == 2) ? 1.25f : (curTextMode == 1) ? 1.15f : 1.0f;
+    int pxSmall = std::clamp(static_cast<int>(std::round(15.0f * clampedScale * atlasBoost)), 18, 112);
+    int pxBody  = std::clamp(static_cast<int>(std::round(20.0f * clampedScale * atlasBoost)), 24, 144);
     int pxBold  = std::clamp(static_cast<int>(std::round(32.0f * clampedScale)), 36, 176);
     int pxHero  = std::clamp(static_cast<int>(std::round(66.0f * clampedScale)), 64, 256);
 #if defined(PLATFORM_ANDROID)
@@ -129,6 +160,7 @@ void RailGame::ShutdownUiFonts() {
     g_uiFontBold  = Font{};
     g_uiFontHero  = Font{};
     g_builtFontScale = 0.0f;
+    g_builtTextSizeMode = -1;
 }
 
 #define MeasureText MeasureGameText
@@ -138,14 +170,50 @@ namespace {
 void DrawTextWrapped(const char* text, int x, int y, int maxWidth, int fontSize, int lineHeight, Color color) {
     if (!text || !text[0]) return;
     std::string input(text);
+
+    auto countLinesAt = [&](float boost) -> int {
+        int lines = 0;
+        std::string curLine, w;
+        for (size_t i = 0; i <= input.size(); ++i) {
+            char c = (i < input.size()) ? input[i] : ' ';
+            if (c == ' ' || c == '\n') {
+                if (!w.empty()) {
+                    std::string cand = curLine.empty() ? w : (curLine + " " + w);
+                    if (MeasureGameTextScaled(cand.c_str(), fontSize, boost) > maxWidth && !curLine.empty()) {
+                        lines++;
+                        curLine = w;
+                    } else {
+                        curLine = cand;
+                    }
+                    w.clear();
+                }
+                if (c == '\n' && !curLine.empty()) { lines++; curLine.clear(); }
+            } else {
+                w.push_back(c);
+            }
+        }
+        if (!curLine.empty()) lines++;
+        return lines;
+    };
+
+    float boost = GetAdaptiveTextScale(fontSize);
+    if (boost > 1.01f) {
+        int baseLines = countLinesAt(1.0f);
+        if (baseLines <= 2 && countLinesAt(boost) > baseLines) {
+            float midBoost = 1.0f + (boost - 1.0f) * 0.52f;
+            boost = (countLinesAt(midBoost) <= baseLines) ? midBoost : 1.04f;
+        }
+    }
+    int effLineH = static_cast<int>(std::round(static_cast<float>(lineHeight) * (1.0f + (boost - 1.0f) * 0.72f)));
+
     std::string currentLine;
     std::string word;
     int curY = y;
 
     auto flushLine = [&]() {
         if (!currentLine.empty()) {
-            DrawText(currentLine.c_str(), x, curY, fontSize, color);
-            curY += lineHeight;
+            DrawGameTextScaled(currentLine.c_str(), x, curY, fontSize, boost, color);
+            curY += effLineH;
             currentLine.clear();
         }
     };
@@ -4058,35 +4126,52 @@ void RailGame::RenderSettings2D() {
 
     DrawText("* Press [N] during gameplay to skip track instantly", static_cast<int>(setX), 524, 12, { 140, 180, 220, 200 });
 
-    // --- RIGHT COLUMN: VISUALS, GAMEPAD & CONTROLS ---
-    DrawText("VISUALS, CONTROLS & GAMEPAD", static_cast<int>(rightColX), 92, 18, SKYBLUE);
+    // --- RIGHT COLUMN: VISUALS, ACCESSIBILITY & CONTROLS ---
+    DrawText("VISUALS, ACCESSIBILITY & CONTROLS", static_cast<int>(rightColX), 92, 18, SKYBLUE);
 
-    // Screen Shake Intensity
-    DrawText("CAMERA SHAKE INTENSITY:", static_cast<int>(rightColX), 124, 16, WHITE);
+    auto drawCenteredOptBtn = [&](Rectangle r, const char* lbl, int fs, bool sel) {
+        DrawRectangleRec(r, sel ? Color{ 35, 65, 105, 255 } : Color{ 18, 24, 38, 220 });
+        DrawRectangleLinesEx(r, sel ? 2.0f : 1.2f, sel ? GOLD : GRAY);
+        int lw = MeasureText(lbl, fs);
+        DrawText(lbl, static_cast<int>(r.x + (r.width - lw) * 0.5f), static_cast<int>(r.y + 10), fs, sel ? GOLD : LIGHTGRAY);
+    };
+
+    // 1. UI Text Size (Accessibility)
+    DrawText("UI TEXT SIZE (ACCESSIBILITY):", static_cast<int>(rightColX), 118, 15, WHITE);
+    const char* txtSizeLabels[3] = { "NORMAL (100%)", "LARGE (115%)", "EXTRA LARGE" };
+    for (int ts = 0; ts < 3; ++ts) {
+        Rectangle tb = { rightColX + ts * 168.0f, 141.0f, 156.0f, 36.0f };
+        bool sel = (save_.textSize == ts);
+        drawCenteredOptBtn(tb, txtSizeLabels[ts], 12, sel);
+        if (IsButtonClicked(tb)) {
+            save_.textSize = ts;
+            RefreshUiFonts(uiScale_);
+            audio_.PlayUiClick();
+        }
+    }
+
+    // 2. Screen Shake Intensity
+    DrawText("CAMERA SHAKE INTENSITY:", static_cast<int>(rightColX), 190, 15, WHITE);
     const char* shakeLabels[3] = { "OFF (0%)", "NORMAL (50%)", "INTENSE (100%)" };
     float shakeVals[3] = { 0.0f, 0.5f, 1.0f };
     for (int i = 0; i < 3; ++i) {
-        Rectangle sb = { rightColX + i * 168.0f, 150.0f, 156.0f, 38.0f };
+        Rectangle sb = { rightColX + i * 168.0f, 213.0f, 156.0f, 36.0f };
         bool sel = (std::abs(save_.screenShakeScale - shakeVals[i]) < 0.15f);
-        DrawRectangleRec(sb, sel ? Color{ 35, 65, 105, 255 } : Color{ 18, 24, 38, 220 });
-        DrawRectangleLinesEx(sb, sel ? 2.0f : 1.2f, sel ? GOLD : GRAY);
-        DrawText(shakeLabels[i], static_cast<int>(sb.x + 16), static_cast<int>(sb.y + 11), 14, sel ? GOLD : LIGHTGRAY);
+        drawCenteredOptBtn(sb, shakeLabels[i], 12, sel);
         if (IsButtonClicked(sb)) {
             save_.screenShakeScale = shakeVals[i];
             audio_.PlayUiClick();
         }
     }
 
-    // Target FPS
-    DrawText("TARGET PERFORMANCE FPS:", static_cast<int>(rightColX), 206, 16, WHITE);
+    // 3. Target FPS
+    DrawText("TARGET PERFORMANCE FPS:", static_cast<int>(rightColX), 262, 15, WHITE);
     int fpsVals[3] = { 60, 120, 30 };
-    const char* fpsLabels[3] = { "60 FPS (BALANCED)", "120 FPS (ULTRA)", "30 FPS (SAVER)" };
+    const char* fpsLabels[3] = { "60 FPS", "120 FPS", "30 FPS" };
     for (int f = 0; f < 3; ++f) {
-        Rectangle fb = { rightColX + f * 168.0f, 232.0f, 156.0f, 38.0f };
+        Rectangle fb = { rightColX + f * 168.0f, 285.0f, 156.0f, 36.0f };
         bool sel = (save_.targetFps == fpsVals[f]);
-        DrawRectangleRec(fb, sel ? Color{ 35, 65, 105, 255 } : Color{ 18, 24, 38, 220 });
-        DrawRectangleLinesEx(fb, sel ? 2.0f : 1.2f, sel ? GOLD : GRAY);
-        DrawText(fpsLabels[f], static_cast<int>(fb.x + 8), static_cast<int>(fb.y + 11), 12, sel ? GOLD : LIGHTGRAY);
+        drawCenteredOptBtn(fb, fpsLabels[f], 13, sel);
         if (IsButtonClicked(fb)) {
             save_.targetFps = fpsVals[f];
             SetTargetFPS(save_.targetFps);
@@ -4094,40 +4179,35 @@ void RailGame::RenderSettings2D() {
         }
     }
 
-    // Swipe Sensitivity
-    DrawText("SWIPE RAIL-SWITCH SENSITIVITY:", static_cast<int>(rightColX), 288, 16, WHITE);
+    // 4. Swipe Sensitivity
+    DrawText("SWIPE RAIL-SWITCH SENSITIVITY:", static_cast<int>(rightColX), 334, 15, WHITE);
     const char* sensLabels[3] = { "LOW (PRECISE)", "MEDIUM (NORMAL)", "HIGH (FAST)" };
     for (int s = 0; s < 3; ++s) {
-        Rectangle sensBtn = { rightColX + s * 168.0f, 314.0f, 156.0f, 38.0f };
+        Rectangle sensBtn = { rightColX + s * 168.0f, 357.0f, 156.0f, 36.0f };
         bool sel = (save_.swipeSensitivity == s);
-        DrawRectangleRec(sensBtn, sel ? Color{ 35, 65, 105, 255 } : Color{ 18, 24, 38, 220 });
-        DrawRectangleLinesEx(sensBtn, sel ? 2.0f : 1.2f, sel ? GOLD : GRAY);
-        DrawText(sensLabels[s], static_cast<int>(sensBtn.x + 12), static_cast<int>(sensBtn.y + 11), 12, sel ? GOLD : LIGHTGRAY);
+        drawCenteredOptBtn(sensBtn, sensLabels[s], 12, sel);
         if (IsButtonClicked(sensBtn)) {
             save_.swipeSensitivity = s;
             audio_.PlayUiClick();
         }
     }
 
-    // Handedness
-    DrawText("MOBILE ACTION BUTTONS HANDEDNESS:", static_cast<int>(rightColX), 370, 16, WHITE);
-    Rectangle handRight = { rightColX, 396.0f, 210.0f, 38.0f };
-    Rectangle handLeft  = { rightColX + 222.0f, 396.0f, 210.0f, 38.0f };
-    DrawRectangleRec(handRight, !save_.leftHandedControls ? Color{ 35, 65, 105, 255 } : Color{ 18, 24, 38, 220 });
-    DrawRectangleLinesEx(handRight, !save_.leftHandedControls ? 2.0f : 1.2f, !save_.leftHandedControls ? GOLD : GRAY);
-    DrawText("RIGHT-HANDED (DEFAULT)", static_cast<int>(handRight.x + 12), static_cast<int>(handRight.y + 11), 13, !save_.leftHandedControls ? GOLD : LIGHTGRAY);
+    // 5. Handedness
+    DrawText("MOBILE ACTION BUTTONS HANDEDNESS:", static_cast<int>(rightColX), 406, 15, WHITE);
+    Rectangle handRight = { rightColX, 429.0f, 210.0f, 36.0f };
+    Rectangle handLeft  = { rightColX + 222.0f, 429.0f, 210.0f, 36.0f };
+    drawCenteredOptBtn(handRight, "RIGHT-HANDED", 13, !save_.leftHandedControls);
     if (IsButtonClicked(handRight)) { save_.leftHandedControls = false; audio_.PlayUiClick(); }
-
-    DrawRectangleRec(handLeft, save_.leftHandedControls ? Color{ 35, 65, 105, 255 } : Color{ 18, 24, 38, 220 });
-    DrawRectangleLinesEx(handLeft, save_.leftHandedControls ? 2.0f : 1.2f, save_.leftHandedControls ? GOLD : GRAY);
-    DrawText("LEFT-HANDED (MIRRORED)", static_cast<int>(handLeft.x + 12), static_cast<int>(handLeft.y + 11), 13, save_.leftHandedControls ? GOLD : LIGHTGRAY);
+    drawCenteredOptBtn(handLeft, "LEFT-HANDED", 13, save_.leftHandedControls);
     if (IsButtonClicked(handLeft)) { save_.leftHandedControls = true; audio_.PlayUiClick(); }
 
     // Clear Save Data Button (Right Column)
-    Rectangle resetBtn = { rightColX, 468.0f, 310.0f, 42.0f };
+    Rectangle resetBtn = { rightColX, 482.0f, 310.0f, 40.0f };
     DrawRectangleRec(resetBtn, showResetConfirm_ ? Color{ 110, 30, 35, 255 } : Color{ 48, 20, 26, 230 });
     DrawRectangleLinesEx(resetBtn, 2.0f, RED);
-    DrawText(showResetConfirm_ ? "CONFIRM RESET PROGRESS?" : "CLEAR SAVE DATA (RESET)", static_cast<int>(resetBtn.x + 18), static_cast<int>(resetBtn.y + 13), 14, WHITE);
+    const char* rstLbl = showResetConfirm_ ? "CONFIRM RESET PROGRESS?" : "CLEAR SAVE DATA (RESET)";
+    int rlw = MeasureText(rstLbl, 13);
+    DrawText(rstLbl, static_cast<int>(resetBtn.x + (resetBtn.width - rlw) * 0.5f), static_cast<int>(resetBtn.y + 12), 13, WHITE);
     if (IsButtonClicked(resetBtn)) {
         if (!showResetConfirm_) {
             showResetConfirm_ = true;
@@ -4143,6 +4223,7 @@ void RailGame::RenderSettings2D() {
             fresh.leftHandedControls = save_.leftHandedControls;
             fresh.swipeSensitivity = save_.swipeSensitivity;
             fresh.musicTrackChoice = save_.musicTrackChoice;
+            fresh.textSize = save_.textSize;
             save_ = fresh;
             SaveProgress();
             showResetConfirm_ = false;
@@ -4150,17 +4231,18 @@ void RailGame::RenderSettings2D() {
         }
     }
     if (showResetConfirm_) {
-        Rectangle cancelReset = { rightColX + 325.0f, 468.0f, 110.0f, 42.0f };
+        Rectangle cancelReset = { rightColX + 325.0f, 482.0f, 110.0f, 40.0f };
         DrawRectangleRec(cancelReset, { 28, 38, 52, 240 });
         DrawRectangleLinesEx(cancelReset, 1.5f, SKYBLUE);
-        DrawText("CANCEL", static_cast<int>(cancelReset.x + 20), static_cast<int>(cancelReset.y + 13), 14, WHITE);
+        int clw = MeasureText("CANCEL", 13);
+        DrawText("CANCEL", static_cast<int>(cancelReset.x + (cancelReset.width - clw) * 0.5f), static_cast<int>(cancelReset.y + 12), 13, WHITE);
         if (IsButtonClicked(cancelReset)) { showResetConfirm_ = false; audio_.PlayUiClick(); }
     }
 
     // --- BOTTOM ROW: FOOTER INFO & BACK ---
     DrawLine(static_cast<int>(setX), 545, static_cast<int>(setX + setW), 545, { 255, 255, 255, 45 });
 
-    const char* bInfo = "RATCHET & CLANK: RAILFINITY  |  v1.3.0 EXPANSION  |  SEBINY LABS ENGINE";
+    const char* bInfo = "RATCHET & CLANK: RAILFINITY  |  v1.0  |  SEBINY LABS";
     int biw = MeasureText(bInfo, 13);
     DrawText(bInfo, static_cast<int>((virtualWidth_ - biw) / 2), 555, 13, { 140, 175, 215, 180 });
 

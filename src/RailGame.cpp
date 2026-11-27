@@ -617,6 +617,7 @@ void RailGame::LoadSave() {
             }
             save_.equippedArmor = std::clamp(save_.equippedArmor, 0, static_cast<int>(NUM_ARMOR_SUITS) - 1);
             save_.equippedClankSkin = std::clamp(save_.equippedClankSkin, 0, static_cast<int>(NUM_CLANK_SKINS) - 1);
+            save_.textSize = std::clamp(save_.textSize, 0, 2);
             save_.unlockedArmors[0] = true;
             save_.unlockedClankSkins[0] = true;
             save_.totalBoltsEarnedLifetime = std::max(save_.totalBoltsEarnedLifetime, save_.bolts);

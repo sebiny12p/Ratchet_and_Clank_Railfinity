@@ -93,7 +93,7 @@ Each run shuffles all 8 sectors with smooth 40m atmospheric crossfades, spatial 
 
 - **Soundtrack Jukebox:** 4 dynamic Insomniac-inspired chiptune/synth themes (*Rift Apart Main Theme*, *A Crack in Time*, *Going Commando - Tabora*, *Up Your Arsenal - Marcadia*).
 - **Crisp Native-Resolution 3D & UI:** Native display-resolution backbuffer with `4x MSAA` anti-aliasing, custom 32-bit `highp` OpenGL ES shaders on Android, and display-scaled `Roboto` typography.
-- **Accessibility & QOL:** Borderless native fullscreen (`F11 / Alt+Enter`), `0.29s` committed rail hops with input buffering, left-handed touch controls, configurable swipe sensitivity, focus-loss auto-pause, smooth `0.75s` unpause speed ramp, `Q`/`E` (`LB`/`RB`) tab cycling, and live `"!"` upgrade badges.
+- **Accessibility & QOL:** 3-tier UI Text Size scaling (`Normal` / `Large` / `Extra Large`), borderless native fullscreen (`F11 / Alt+Enter`), `0.29s` committed rail hops with input buffering, left-handed touch controls, configurable swipe sensitivity, focus-loss auto-pause, smooth `0.75s` unpause speed ramp, `Q`/`E` (`LB`/`RB`) tab cycling, and live `"!"` upgrade badges.
 
 ---
 
