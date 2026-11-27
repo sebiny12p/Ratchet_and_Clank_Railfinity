@@ -1,5 +1,9 @@
 # Ratchet & Clank: Railfinity
 
+[![C++20 & WebAssembly CI](https://github.com/sebiny12p/Ratchet_and_Clank_Railfinity/actions/workflows/ci.yml/badge.svg)](https://github.com/sebiny12p/Ratchet_and_Clank_Railfinity/actions/workflows/ci.yml)
+[![Play in Browser](https://img.shields.io/badge/Play_in_Browser-WebAssembly-10b981?logo=webassembly&logoColor=white)](https://sebiny12p.github.io/Portfolio/play/railfinity/)
+[![Language](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)](ARCHITECTURE.md)
+
 An infinite, procedural 3D action grindrail runner built in **C++20** with **Raylib 5.0** for Windows and Android, inspired by *Ratchet & Clank: Rift Apart* and *Before the Nexus*. Grind high-speed plasma rails across 8 shuffled galactic sectors, deploy Clank's Heli-Pack and Swingshot grapples, smash Bolt Crates and Raritanium caches with the OmniWrench 8000, rotate across 6 upgradeable Gadgetron weapons, customize **Ratchet, Rivet, Clank, and Kit** in an interactive 3D Wardrobe Lab, and take on daily Dreadzone mutators and live radio dares from Captain Qwark and Dr. Nefarious.
 
 > **Studio:** Sebiny Labs  
