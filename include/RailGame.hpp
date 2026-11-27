@@ -83,6 +83,9 @@ private:
     const char* GetSectorName(GalaxySector s) const;
     Vector2 GetVirtualMouse() const;
     Vector2 ToVirtualCoords(Vector2 screenPos) const;
+    int GetActiveTouchCount() const;
+    int GetActiveTouchId(int idx) const;
+    Vector2 GetActiveTouchVirtualPos(int idx) const;
     bool IsRectHovered(Rectangle r) const;
     bool IsButtonClicked(Rectangle r) const;
     bool HasAffordableArsenalTab(int tab) const;
@@ -170,7 +173,9 @@ private:
 
     // Touch / Mouse Swipe & Tap Gesture Tracking
     bool pointerDown_ = false;
+    int swipeTouchId_ = -1;
     Vector2 pointerStartPos_ = { 0.0f, 0.0f };
+    Vector2 pointerLastPos_ = { 0.0f, 0.0f };
     float pointerDownTime_ = 0.0f;
     bool touchHoldingJump_ = false;
     bool gestureConsumed_ = false;
