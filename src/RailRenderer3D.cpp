@@ -17,6 +17,41 @@ float g_builtFontScale = 0.0f;
 int g_builtTextSizeMode = -1;
 float g_activeUiScale = 1.0f;
 int g_uiTextSizeMode = 0; // 0 = Normal, 1 = Large, 2 = Extra Large
+float g_curVirtualWidth = 1280.0f;
+
+struct UiBoxTracker {
+    std::array<Rectangle, 24> boxes{};
+    int count = 0;
+    void Reset(float vw) {
+        count = 0;
+        g_curVirtualWidth = vw;
+    }
+    void Push(Rectangle r) {
+        if (r.width < 54.0f || r.width > g_curVirtualWidth - 24.0f || r.height < 24.0f || r.height > 680.0f) return;
+        for (int i = 0; i < count; ++i) {
+            if (std::abs(boxes[i].x - r.x) < 2.0f && std::abs(boxes[i].y - r.y) < 2.0f && std::abs(boxes[i].height - r.height) < 2.0f) {
+                if (r.width > boxes[i].width) boxes[i].width = r.width;
+                return;
+            }
+        }
+        if (count < static_cast<int>(boxes.size())) {
+            boxes[count++] = r;
+        } else {
+            for (int i = 1; i < count; ++i) boxes[i - 1] = boxes[i];
+            boxes[count - 1] = r;
+        }
+    }
+} g_uiBoxes;
+
+void DrawTrackedRect(int posX, int posY, int width, int height, Color color) {
+    g_uiBoxes.Push({ static_cast<float>(posX), static_cast<float>(posY), static_cast<float>(width), static_cast<float>(height) });
+    ::DrawRectangle(posX, posY, width, height, color);
+}
+
+void DrawTrackedRectRec(Rectangle rec, Color color) {
+    g_uiBoxes.Push(rec);
+    ::DrawRectangleRec(rec, color);
+}
 
 float GetAdaptiveTextScale(int fontSize, int mode = g_uiTextSizeMode) {
     if (mode <= 0) return 1.0f;
@@ -102,7 +137,51 @@ void DrawGameTextScaled(const char* text, int posX, int posY, int fontSize, floa
 }
 
 void DrawGameText(const char* text, int posX, int posY, int fontSize, Color color) {
-    DrawGameTextScaled(text, posX, posY, fontSize, GetAdaptiveTextScale(fontSize), color);
+    if (!text || !text[0]) return;
+    float boost = GetAdaptiveTextScale(fontSize);
+    int w = MeasureGameTextScaled(text, fontSize, boost);
+
+    // Universal Container Auto-Fit Guard: prevent any single-line label from crossing its enclosing box's right border!
+    int bestIdx = -1;
+    float bestWidth = 1e9f;
+    for (int i = g_uiBoxes.count - 1; i >= 0; --i) {
+        const Rectangle& b = g_uiBoxes.boxes[i];
+        if (posX >= b.x - 4.0f && posX < b.x + b.width - 12.0f &&
+            posY >= b.y - 1.0f && posY <= b.y + b.height - 6.0f) {
+            if (b.width < bestWidth) {
+                bestWidth = b.width;
+                bestIdx = i;
+            }
+        }
+    }
+    if (bestIdx >= 0) {
+        const Rectangle& b = g_uiBoxes.boxes[bestIdx];
+        float rightLimit = b.x + b.width - 8.0f;
+        if (static_cast<float>(posX + w) > rightLimit && w > 0) {
+            int clampedX = std::max(posX, static_cast<int>(std::ceil(b.x + 6.0f)));
+            float availW = std::max(24.0f, rightLimit - static_cast<float>(clampedX));
+            float fitScale = availW / static_cast<float>(w);
+            boost = std::max(0.62f, boost * fitScale);
+            // If label was centered inside a narrow button, keep it centered after fitting
+            if (posX < static_cast<int>(b.x + 10.0f) && b.width <= 340.0f) {
+                int newW = MeasureGameTextScaled(text, fontSize, boost);
+                posX = static_cast<int>(b.x + (b.width - newW) * 0.5f);
+            } else {
+                posX = clampedX;
+            }
+        }
+    }
+    DrawGameTextScaled(text, posX, posY, fontSize, boost, color);
+}
+
+void DrawGameTextFit(const char* text, int posX, int posY, int maxWidth, int fontSize, Color color) {
+    if (!text || !text[0]) return;
+    float boost = GetAdaptiveTextScale(fontSize);
+    int w = MeasureGameTextScaled(text, fontSize, boost);
+    if (w > maxWidth && w > 0) {
+        boost = std::max(0.62f, boost * (static_cast<float>(maxWidth) / static_cast<float>(w)));
+    }
+    DrawGameTextScaled(text, posX, posY, fontSize, boost, color);
 }
 
 void DrawUpgradeBadge(Rectangle r, float globalTime) {
@@ -165,6 +244,8 @@ void RailGame::ShutdownUiFonts() {
 
 #define MeasureText MeasureGameText
 #define DrawText DrawGameText
+#define DrawRectangle DrawTrackedRect
+#define DrawRectangleRec DrawTrackedRectRec
 
 namespace {
 void DrawTextWrapped(const char* text, int x, int y, int maxWidth, int fontSize, int lineHeight, Color color) {
@@ -374,6 +455,7 @@ void DrawSectorSkyDecor(Railfinity::GalaxySector sec, float virtualWidth, float 
 
 void RailGame::RenderFrame() {
     UpdateVirtualResolution();
+    g_uiBoxes.Reset(virtualWidth_);
 
     BeginDrawing();
 
@@ -2999,21 +3081,24 @@ void RailGame::RenderHud2D() {
     DrawRectangle(245, 80, 104, 12, { 30, 38, 52, 255 });
     DrawRectangle(245, 80, static_cast<int>(104.0f * player_.multiplierProgress), 12, GOLD);
 
-    // Top-Right Bolts, Raritanium & Distance Odometer
-    DrawRectangle(static_cast<int>(virtualWidth_ - 320), 20, 300, 96, { 12, 18, 32, 215 });
-    DrawRectangleLinesEx({ virtualWidth_ - 320.0f, 20.0f, 300.0f, 96.0f }, 2.0f, { 65, 215, 255, 190 });
-
+    // Top-Right Bolts, Raritanium & Distance Odometer (dynamically sized for large bolt counts & text sizes)
     char distBuf[64], boltBuf[64], rariBuf[64];
     std::snprintf(distBuf, sizeof(distBuf), "DISTANCE: %d m", static_cast<int>(distanceMeters_));
     std::snprintf(boltBuf, sizeof(boltBuf), "BOLTS: %d (+%d)", save_.bolts, runBoltsEarned_);
     std::snprintf(rariBuf, sizeof(rariBuf), "RARITANIUM: %d (+%d)", save_.raritanium, runRaritaniumEarned_);
+    int trMaxW = std::max({ MeasureText(distBuf, 24), MeasureText(boltBuf, 18), MeasureText(rariBuf, 16) });
+    int trBoxW = std::max(300, trMaxW + 34);
+    int trBoxX = static_cast<int>(virtualWidth_) - 20 - trBoxW;
 
-    DrawText(distBuf, static_cast<int>(virtualWidth_ - 304), 28, 24, WHITE);
-    DrawText(boltBuf, static_cast<int>(virtualWidth_ - 304), 58, 18, GOLD);
-    DrawText(rariBuf, static_cast<int>(virtualWidth_ - 304), 82, 16, SKYBLUE);
+    DrawRectangle(trBoxX, 20, trBoxW, 96, { 12, 18, 32, 215 });
+    DrawRectangleLinesEx({ static_cast<float>(trBoxX), 20.0f, static_cast<float>(trBoxW), 96.0f }, 2.0f, { 65, 215, 255, 190 });
+
+    DrawText(distBuf, trBoxX + 16, 28, 24, WHITE);
+    DrawText(boltBuf, trBoxX + 16, 58, 18, GOLD);
+    DrawText(rariBuf, trBoxX + 16, 82, 16, SKYBLUE);
 
     // On-Screen Holographic Touch Pause Button (Mobile-Friendly)
-    Rectangle pauseBtn = { virtualWidth_ - 386.0f, 20.0f, 54.0f, 54.0f };
+    Rectangle pauseBtn = { static_cast<float>(trBoxX) - 66.0f, 20.0f, 54.0f, 54.0f };
     bool pauseActive = (touchFeedbackPause_ > 0.0f);
     bool pauseHover = IsRectHovered(pauseBtn) || pauseActive;
     DrawRectangleRec(pauseBtn, pauseActive ? Color{ 45, 75, 115, 255 } : (pauseHover ? Color{ 24, 38, 62, 230 } : Color{ 12, 18, 32, 200 }));
@@ -3089,21 +3174,26 @@ void RailGame::RenderHud2D() {
         }
     }
 
-    // Equipped Weapon Banner (Bottom-Left)
+    // Equipped Weapon Banner (Bottom-Left — dynamically sized so long perks never clip the border!)
     int eq = save_.equippedWeapon;
     int eqLvl = save_.weaponLevels[eq];
     const char* wTitle = (eqLvl >= 5) ? weaps[eq].omegaName : weaps[eq].name;
-    DrawRectangle(20, static_cast<int>(720.0f - 96.0f), 480, 76, { 12, 18, 32, 220 });
-    DrawRectangleLinesEx({ 20.0f, 720.0f - 96.0f, 480.0f, 76.0f }, 1.5f, weaps[eq].projectileColor);
-    DrawText(wTitle, 32, static_cast<int>(720.0f - 88.0f), 18, WHITE);
     char xpLine[96];
     char ammoSeg[32];
     if (eq == 0) std::snprintf(ammoSeg, sizeof(ammoSeg), "AMMO: INF");
     else std::snprintf(ammoSeg, sizeof(ammoSeg), "AMMO: %d/%d", player_.weaponAmmo[eq], player_.weaponMaxAmmo[eq]);
     if (eqLvl >= 5) std::snprintf(xpLine, sizeof(xpLine), "OMEGA MASTERWORK V5  |  %s", ammoSeg);
     else std::snprintf(xpLine, sizeof(xpLine), "LEVEL V%d  |  WEAP XP: %d / %d  |  %s", eqLvl, save_.weaponXp[eq], eqLvl * 120, ammoSeg);
-    DrawText(xpLine, 32, static_cast<int>(720.0f - 65.0f), 14, GOLD);
-    DrawText(weaps[eq].specialPerk, 32, static_cast<int>(720.0f - 44.0f), 12, SKYBLUE);
+
+    int maxAllowedBanW = std::max(480, static_cast<int>(virtualWidth_ - 454.0f));
+    int neededBanW = std::max({ MeasureText(wTitle, 18), MeasureText(xpLine, 14), MeasureText(weaps[eq].specialPerk, 12) }) + 28;
+    int banW = std::clamp(neededBanW, 480, maxAllowedBanW);
+
+    DrawRectangle(20, static_cast<int>(720.0f - 96.0f), banW, 76, { 12, 18, 32, 220 });
+    DrawRectangleLinesEx({ 20.0f, 720.0f - 96.0f, static_cast<float>(banW), 76.0f }, 1.5f, weaps[eq].projectileColor);
+    DrawGameTextFit(wTitle, 32, static_cast<int>(720.0f - 88.0f), banW - 24, 18, WHITE);
+    DrawGameTextFit(xpLine, 32, static_cast<int>(720.0f - 65.0f), banW - 24, 14, GOLD);
+    DrawGameTextFit(weaps[eq].specialPerk, 32, static_cast<int>(720.0f - 44.0f), banW - 24, 12, SKYBLUE);
 
     // On-Screen Holographic Touch Controls (Optimized for Mobile & Touch Screen Play)
     Rectangle btnJumpRec = save_.leftHandedControls
@@ -3187,9 +3277,11 @@ void RailGame::RenderHud2D() {
         Color txtCol = (std::fmod(globalTime_ * 10.0f, 1.0f) < 0.5f) ? YELLOW : WHITE;
         DrawText(hoverMsg, static_cast<int>(virtualWidth_ * 0.5f - mw * 0.5f), 177, 18, txtCol);
     } else if (!IsRailActiveAt(player_.currentLane, 32.0f)) {
-        DrawRectangle(static_cast<int>(virtualWidth_ * 0.5f - 210), 168, 420, 36, { 35, 12, 16, 230 });
-        DrawRectangleLines(static_cast<int>(virtualWidth_ * 0.5f - 210), 168, 420, 36, RED);
-        DrawText("! TRACK ENDING AHEAD: HOP OVER !", static_cast<int>(virtualWidth_ * 0.5f - 185), 177, 18, RED);
+        const char* endMsg = "! TRACK ENDING AHEAD: HOP OVER !";
+        int ew = MeasureText(endMsg, 18);
+        DrawRectangle(static_cast<int>(virtualWidth_ * 0.5f - ew * 0.5f - 20), 168, ew + 40, 36, { 35, 12, 16, 230 });
+        DrawRectangleLines(static_cast<int>(virtualWidth_ * 0.5f - ew * 0.5f - 20), 168, ew + 40, 36, RED);
+        DrawText(endMsg, static_cast<int>(virtualWidth_ * 0.5f - ew * 0.5f), 177, 18, RED);
     }
 
     // First-Run Control Hint Pill (fades cleanly after 4.5s on a player's very first run)
@@ -3411,16 +3503,16 @@ void RailGame::RenderMainMenu2D() {
 
     if (menuSelectDaily_) {
         const auto& mDef = GetMutatorCatalog()[static_cast<int>(GetTodaysMutator())];
-        Rectangle card = { virtualWidth_ - 492.0f, 488.0f, 436.0f, 152.0f };
+        Rectangle card = { virtualWidth_ - 516.0f, 486.0f, 468.0f, 154.0f };
         DrawRectangleRec(card, { 12, 18, 32, 232 });
         DrawRectangleLinesEx(card, 2.0f, GOLD);
         DrawRectangle(static_cast<int>(card.x), static_cast<int>(card.y), static_cast<int>(card.width), 30, { 38, 28, 12, 245 });
         DrawText("TODAY'S DAILY ARENA MUTATOR", static_cast<int>(card.x + 14), static_cast<int>(card.y + 8), 13, GOLD);
         DrawText(mDef.name, static_cast<int>(card.x + 14), static_cast<int>(card.y + 38), 20, WHITE);
-        DrawTextWrapped(mDef.hazardDesc, static_cast<int>(card.x + 14), static_cast<int>(card.y + 66), 408, 13, 16, ORANGE);
-        DrawTextWrapped(mDef.perkDesc, static_cast<int>(card.x + 14), static_cast<int>(card.y + 98), 408, 13, 16, GREEN);
-        DrawText("REWARDS: 2x Contract Speed  |  2x Rari Caches  |  +2 Rari/Sector",
-                 static_cast<int>(card.x + 14), static_cast<int>(card.y + 132), 12, SKYBLUE);
+        DrawTextWrapped(mDef.hazardDesc, static_cast<int>(card.x + 14), static_cast<int>(card.y + 66), 440, 13, 16, ORANGE);
+        DrawTextWrapped(mDef.perkDesc, static_cast<int>(card.x + 14), static_cast<int>(card.y + 98), 440, 13, 16, GREEN);
+        DrawGameTextFit("REWARDS: 2x Contract Speed  |  2x Rari Caches  |  +2 Rari/Sector",
+                        static_cast<int>(card.x + 14), static_cast<int>(card.y + 132), 440, 12, SKYBLUE);
     }
 
     RenderBrandingFooter2D();
@@ -3483,15 +3575,15 @@ void RailGame::RenderGadgetronVendor2D() {
         bool isGold = save_.goldenWeapons[i];
         const char* title = isGold ? GOLDEN_WEAPON_CATALOG[i].name : ((lvl >= 5) ? cat[i].omegaName : cat[i].name);
         Color wCol = isGold ? GOLD : cat[i].projectileColor;
-        DrawText(title, static_cast<int>(r.x + 18), static_cast<int>(r.y + 9), 19, wCol);
-        DrawText(isGold ? GOLDEN_WEAPON_CATALOG[i].masteryPerk : cat[i].specialPerk,
-                 static_cast<int>(r.x + 18), static_cast<int>(r.y + 32), 14, GOLD);
-        DrawText(cat[i].description, static_cast<int>(r.x + 18), static_cast<int>(r.y + 52), 13, LIGHTGRAY);
+        DrawGameTextFit(title, static_cast<int>(r.x + 18), static_cast<int>(r.y + 9), 670, 19, wCol);
+        DrawGameTextFit(isGold ? GOLDEN_WEAPON_CATALOG[i].masteryPerk : cat[i].specialPerk,
+                        static_cast<int>(r.x + 18), static_cast<int>(r.y + 32), 670, 14, GOLD);
+        DrawGameTextFit(cat[i].description, static_cast<int>(r.x + 18), static_cast<int>(r.y + 52), 670, 13, LIGHTGRAY);
 
         char lvlStr[32];
         if (isGold) std::snprintf(lvlStr, sizeof(lvlStr), "24K GOLD");
         else std::snprintf(lvlStr, sizeof(lvlStr), "LEVEL V%d", lvl);
-        DrawText(lvlStr, static_cast<int>(r.x + 695), static_cast<int>(r.y + 29), 19, (isGold || lvl >= 5) ? GOLD : WHITE);
+        DrawText(lvlStr, static_cast<int>(r.x + 704), static_cast<int>(r.y + 29), 19, (isGold || lvl >= 5) ? GOLD : WHITE);
 
         Rectangle eqBtn = { r.x + 810.0f, r.y + 17.0f, 160.0f, 44.0f };
         if (unlocked) {
@@ -3548,10 +3640,12 @@ void RailGame::RenderGadgetronVendor2D() {
                 bool canForge = (save_.raritanium >= gRariCost && save_.bolts >= gBoltCost);
                 DrawRectangleRec(upBtn, canForge ? Color{ 140, 95, 20, 255 } : Color{ 45, 35, 30, 255 });
                 DrawRectangleLinesEx(upBtn, 2.0f, canForge ? GOLD : GRAY);
-                DrawText("FORGE 24K GOLD", static_cast<int>(upBtn.x + 12), static_cast<int>(upBtn.y + 8), 13, canForge ? GOLD : GRAY);
+                int fgw = MeasureText("FORGE 24K GOLD", 12);
+                DrawText("FORGE 24K GOLD", static_cast<int>(upBtn.x + (upBtn.width - fgw) * 0.5f), static_cast<int>(upBtn.y + 7), 12, canForge ? GOLD : GRAY);
                 char gCostStr[48];
                 std::snprintf(gCostStr, sizeof(gCostStr), "%dB, %dR", gBoltCost, gRariCost);
-                DrawText(gCostStr, static_cast<int>(upBtn.x + 22), static_cast<int>(upBtn.y + 25), 13, canForge ? WHITE : GRAY);
+                int gcw = MeasureText(gCostStr, 12);
+                DrawText(gCostStr, static_cast<int>(upBtn.x + (upBtn.width - gcw) * 0.5f), static_cast<int>(upBtn.y + 25), 12, canForge ? WHITE : GRAY);
                 if (IsButtonClicked(upBtn) && canForge) {
                     save_.bolts -= gBoltCost;
                     save_.raritanium -= gRariCost;
@@ -3663,9 +3757,9 @@ void RailGame::RenderRaritaniumLab2D() {
     Rectangle hgRec = { uiX, 508.0f, uiW, 92.0f };
     DrawRectangleRec(hgRec, save_.hoverbootsUnlocked ? Color{ 22, 38, 56, 240 } : Color{ 16, 24, 40, 235 });
     DrawRectangleLinesEx(hgRec, 2.0f, save_.hoverbootsUnlocked ? GOLD : ORANGE);
-    DrawText("OVERDRIVE HOVERBOOTS (FLAGSHIP GADGET)", static_cast<int>(hgRec.x + 20), static_cast<int>(hgRec.y + 14), 20, GOLD);
-    DrawText("Rocket-propelled boots. Press [SHIFT] / [B] / [BOOST] during runs for 3s supersonic rush obliterating crates & laser gates!",
-             static_cast<int>(hgRec.x + 20), static_cast<int>(hgRec.y + 46), 14, LIGHTGRAY);
+    DrawText("OVERDRIVE HOVERBOOTS (FLAGSHIP GADGET)", static_cast<int>(hgRec.x + 20), static_cast<int>(hgRec.y + 12), 20, GOLD);
+    DrawTextWrapped("Rocket-propelled boots. Press [SHIFT] / [B] / [BOOST] during runs for 3s supersonic rush obliterating crates & laser gates!",
+                    static_cast<int>(hgRec.x + 20), static_cast<int>(hgRec.y + 42), 838, 13, 18, LIGHTGRAY);
 
     Rectangle hgBtn = { hgRec.x + 875.0f, hgRec.y + 22.0f, 265.0f, 48.0f };
     if (save_.hoverbootsUnlocked) {
@@ -3811,9 +3905,9 @@ void RailGame::RenderArmorWardrobe2D() {
             DrawRectangle(static_cast<int>(cardRec.x), static_cast<int>(cardRec.y), 8, static_cast<int>(cardRec.height), a.visorColor);
 
             // Title & Lore
-            DrawText(a.name, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 8), 18, isEquipped ? GREEN : (isPrev ? GOLD : WHITE));
-            DrawText(a.origin, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 30), 12, SKYBLUE);
-            DrawText(a.perkDesc, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 50), 12, LIGHTGRAY);
+            DrawGameTextFit(a.name, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 8), 455, 18, isEquipped ? GREEN : (isPrev ? GOLD : WHITE));
+            DrawGameTextFit(a.origin, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 30), 455, 12, SKYBLUE);
+            DrawGameTextFit(a.perkDesc, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 50), 455, 12, LIGHTGRAY);
 
             // Action / Status Button on Right
             Rectangle btnAction = { cardRec.x + cardRec.width - 165.0f, cardRec.y + 16.0f, 150.0f, 42.0f };
@@ -3883,9 +3977,9 @@ void RailGame::RenderArmorWardrobe2D() {
             // Eye Glow Color Bar
             DrawRectangle(static_cast<int>(cardRec.x), static_cast<int>(cardRec.y), 8, static_cast<int>(cardRec.height), c.eyeColor);
 
-            DrawText(c.name, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 8), 18, isEquipped ? GREEN : (isPrev ? GOLD : WHITE));
-            DrawText(c.origin, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 30), 12, SKYBLUE);
-            DrawText(c.perkDesc, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 50), 12, LIGHTGRAY);
+            DrawGameTextFit(c.name, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 8), 455, 18, isEquipped ? GREEN : (isPrev ? GOLD : WHITE));
+            DrawGameTextFit(c.origin, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 30), 455, 12, SKYBLUE);
+            DrawGameTextFit(c.perkDesc, static_cast<int>(cardRec.x + 20), static_cast<int>(cardRec.y + 50), 455, 12, LIGHTGRAY);
 
             Rectangle btnAction = { cardRec.x + cardRec.width - 165.0f, cardRec.y + 16.0f, 150.0f, 42.0f };
             if (isEquipped) {
@@ -4417,7 +4511,7 @@ void RailGame::RenderBounties2D() {
         DrawRectangle(static_cast<int>(r.x), static_cast<int>(r.y), 6, static_cast<int>(r.height), done ? GREEN : ORANGE);
 
         DrawText(def.title, static_cast<int>(r.x + 22), static_cast<int>(r.y + 14), 20, done ? GREEN : GOLD);
-        DrawText(def.description, static_cast<int>(r.x + 22), static_cast<int>(r.y + 42), 15, LIGHTGRAY);
+        DrawGameTextFit(def.description, static_cast<int>(r.x + 22), static_cast<int>(r.y + 42), static_cast<int>(bW - 290.0f), 15, LIGHTGRAY);
 
         float ratio = std::clamp(static_cast<float>(prog) / static_cast<float>(std::max(1, def.targetCount)), 0.0f, 1.0f);
         Rectangle bar = { r.x + 22.0f, r.y + 72.0f, 520.0f, 14.0f };
@@ -4449,9 +4543,9 @@ void RailGame::RenderBounties2D() {
     DrawRectangleLinesEx(mutRec, 2.0f, GOLD);
     char mHdr[96];
     std::snprintf(mHdr, sizeof(mHdr), "TODAY'S DAILY ARENA MUTATOR: %s", mDef.name);
-    DrawText(mHdr, static_cast<int>(mutRec.x + 20), static_cast<int>(mutRec.y + 14), 18, GOLD);
-    DrawText(mDef.hazardDesc, static_cast<int>(mutRec.x + 20), static_cast<int>(mutRec.y + 44), 14, ORANGE);
-    DrawText(mDef.perkDesc, static_cast<int>(mutRec.x + 20), static_cast<int>(mutRec.y + 68), 14, GREEN);
+    DrawGameTextFit(mHdr, static_cast<int>(mutRec.x + 20), static_cast<int>(mutRec.y + 14), static_cast<int>(bW - 265.0f), 18, GOLD);
+    DrawGameTextFit(mDef.hazardDesc, static_cast<int>(mutRec.x + 20), static_cast<int>(mutRec.y + 44), static_cast<int>(bW - 265.0f), 14, ORANGE);
+    DrawGameTextFit(mDef.perkDesc, static_cast<int>(mutRec.x + 20), static_cast<int>(mutRec.y + 68), static_cast<int>(bW - 265.0f), 14, GREEN);
 
     Rectangle playDailyBtn = { mutRec.x + bW - 235.0f, mutRec.y + 26.0f, 215.0f, 52.0f };
     bool pdHov = IsRectHovered(playDailyBtn);
@@ -4523,7 +4617,8 @@ void RailGame::RenderSkillPoints2D() {
 
         char rew[48];
         std::snprintf(rew, sizeof(rew), done ? "EARNED (+%d B)" : "+%d BOLTS", cat[i].boltReward);
-        DrawText(rew, static_cast<int>(r.x + 410), static_cast<int>(r.y + 12), 15, done ? GREEN : SKYBLUE);
+        int rw = MeasureText(rew, 15);
+        DrawText(rew, static_cast<int>(r.x + r.width - 18.0f - rw), static_cast<int>(r.y + 12), 15, done ? GREEN : SKYBLUE);
     }
 
     DrawLine(static_cast<int>(spX), 580, static_cast<int>(spX + spW), 580, { 255, 255, 255, 45 });
@@ -4598,9 +4693,6 @@ void RailGame::RenderGameOver2D() {
     int gow = MeasureText(goTitle, 44);
     DrawText(goTitle, static_cast<int>((virtualWidth_ - gow) / 2), 165, 44, ORANGE);
 
-    DrawRectangle(static_cast<int>(virtualWidth_ / 2 - 250), 240, 500, 190, { 16, 22, 38, 240 });
-    DrawRectangleLinesEx({ virtualWidth_ / 2.0f - 250.0f, 240.0f, 500.0f, 190.0f }, 2.0f, GOLD);
-
     char l1[96], l2[96], l3[96], l4[96];
     std::snprintf(l1, sizeof(l1), "DISTANCE GRINDED: %d m   (BEST: %d m)",
                   static_cast<int>(distanceMeters_), isDailyRun_ ? save_.bestDailyMeters : save_.bestDistanceMeters);
@@ -4608,10 +4700,15 @@ void RailGame::RenderGameOver2D() {
     std::snprintf(l3, sizeof(l3), "RARITANIUM MINED: +%d", runRaritaniumEarned_);
     std::snprintf(l4, sizeof(l4), "CRATES SMASHED: %d   |   DRONES BLASTED: %d", runCrates_, runKills_);
 
-    DrawText(l1, static_cast<int>(virtualWidth_ / 2 - 215), 264, 20, WHITE);
-    DrawText(l2, static_cast<int>(virtualWidth_ / 2 - 215), 304, 19, GOLD);
-    DrawText(l3, static_cast<int>(virtualWidth_ / 2 - 215), 342, 18, SKYBLUE);
-    DrawText(l4, static_cast<int>(virtualWidth_ / 2 - 215), 380, 17, LIGHTGRAY);
+    int goCardW = std::max(520, std::max({ MeasureText(l1, 20), MeasureText(l2, 19), MeasureText(l3, 18), MeasureText(l4, 17) }) + 64);
+    float goCardX = virtualWidth_ * 0.5f - goCardW * 0.5f;
+    DrawRectangle(static_cast<int>(goCardX), 240, goCardW, 190, { 16, 22, 38, 240 });
+    DrawRectangleLinesEx({ goCardX, 240.0f, static_cast<float>(goCardW), 190.0f }, 2.0f, GOLD);
+
+    DrawText(l1, static_cast<int>(goCardX + 32), 264, 20, WHITE);
+    DrawText(l2, static_cast<int>(goCardX + 32), 304, 19, GOLD);
+    DrawText(l3, static_cast<int>(goCardX + 32), 342, 18, SKYBLUE);
+    DrawText(l4, static_cast<int>(goCardX + 32), 380, 17, LIGHTGRAY);
 
 #if defined(PLATFORM_ANDROID)
     bool touchClean = true;
@@ -4660,7 +4757,9 @@ void RailGame::RenderSkillToast2D() const {
     if (!toast_.active) return;
 
     float alpha = std::clamp(toast_.timer * 1.5f, 0.0f, 1.0f);
-    Rectangle box = { virtualWidth_ / 2.0f - 260.0f, 105.0f, 520.0f, 64.0f };
+    float toastW = std::clamp(static_cast<float>(std::max(MeasureText(toast_.title.c_str(), 18), MeasureText(toast_.subtitle.c_str(), 14)) + 44),
+                              520.0f, virtualWidth_ - 60.0f);
+    Rectangle box = { (virtualWidth_ - toastW) * 0.5f, 105.0f, toastW, 64.0f };
     DrawRectangleRec(box, { 16, 28, 48, static_cast<unsigned char>(235 * alpha) });
     DrawRectangleLinesEx(box, 2.0f, GOLD);
 
@@ -4684,8 +4783,8 @@ void RailGame::RenderRadioComm2D() const {
     }
     unsigned char aByte = static_cast<unsigned char>(alpha * 240.0f);
 
-    float boxW = 600.0f;
-    float boxH = isDare ? 100.0f : 92.0f;
+    float boxW = 650.0f;
+    float boxH = isDare ? 104.0f : 96.0f;
     float boxX = (virtualWidth_ - boxW) * 0.5f;
     float boxY = 82.0f;
 
