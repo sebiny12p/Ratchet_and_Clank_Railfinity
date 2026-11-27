@@ -1,10 +1,19 @@
 #include "RailGame.hpp"
 #include "raylib.h"
+#if defined(PLATFORM_WEB)
+#include <emscripten/emscripten.h>
+static void RunWebFrame(void* arg) {
+    static_cast<Railfinity::RailGame*>(arg)->RunFrame();
+}
+#endif
 
 int main() {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
 #if defined(PLATFORM_ANDROID)
     InitWindow(0, 0, "Ratchet & Clank: Railfinity | Sebiny Labs");
+#elif defined(PLATFORM_WEB)
+    InitWindow(Railfinity::VIRTUAL_WIDTH, Railfinity::VIRTUAL_HEIGHT,
+               "Ratchet & Clank: Railfinity | Sebiny Labs");
 #else
     InitWindow(Railfinity::VIRTUAL_WIDTH, Railfinity::VIRTUAL_HEIGHT,
                "Ratchet & Clank: Railfinity | Sebiny Labs");
@@ -40,9 +49,13 @@ int main() {
     Railfinity::RailGame game;
     game.Init();
 
+#if defined(PLATFORM_WEB)
+    emscripten_set_main_loop_arg(RunWebFrame, &game, 0, 1);
+#else
     while (!WindowShouldClose()) {
         game.RunFrame();
     }
+#endif
 
     game.Shutdown();
     CloseWindow();

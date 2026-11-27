@@ -279,7 +279,7 @@ void RailGame::Init() {
 
     // Cross-platform expressive Lombax Head & Eye Shader (3-point soft lighting, smirk morph,
     // iris saccades, subsurface iris glow, glossy corneal catchlights & natural eyelid blinking!)
-#if defined(PLATFORM_ANDROID)
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_WEB)
     const char* vHeadSrc =
         "#version 100\n"
         "precision highp float;\n"
@@ -1921,7 +1921,7 @@ void RailGame::HandleInput() {
     }
 
     if (IsKeyPressed(KEY_F11) || (IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_ENTER))) {
-#if !defined(PLATFORM_ANDROID)
+#if !defined(PLATFORM_ANDROID) && !defined(PLATFORM_WEB)
         ToggleBorderlessWindowed();
 #else
         ToggleFullscreen();
@@ -3451,7 +3451,7 @@ void RailGame::RunFrame() {
         screenTransitionCooldown_ = std::max(0.0f, screenTransitionCooldown_ - frameDt);
     }
 
-#if !defined(PLATFORM_ANDROID)
+#if !defined(PLATFORM_ANDROID) && !defined(PLATFORM_WEB)
     if (mode_ == ScreenMode::PLAYING && (!IsWindowFocused() || IsWindowMinimized())) {
         unpauseRampTimer_ = 0.0f;
         SetScreenMode(ScreenMode::PAUSED);
