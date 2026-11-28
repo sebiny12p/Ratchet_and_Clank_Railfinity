@@ -16,7 +16,7 @@ int main() {
 #if defined(PLATFORM_ANDROID)
     InitWindow(0, 0, "Ratchet & Clank: Railfinity | Sebiny Labs");
 #elif defined(PLATFORM_WEB)
-    InitWindow(Railfinity::VIRTUAL_WIDTH, Railfinity::VIRTUAL_HEIGHT,
+    InitWindow(1920, 1080,
                "Ratchet & Clank: Railfinity | Sebiny Labs");
 #else
     InitWindow(Railfinity::VIRTUAL_WIDTH, Railfinity::VIRTUAL_HEIGHT,
