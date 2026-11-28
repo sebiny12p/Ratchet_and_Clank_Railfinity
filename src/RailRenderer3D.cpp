@@ -1181,16 +1181,62 @@ void RailGame::RenderHazards3D() const {
                 break;
             }
             case HazardKind::MAGMA_GEYSER: {
-                // Smoldering basalt geyser vent on rail with erupting volcanic flame column!
-                Vector3 ventBase = { lx, ry - 0.1f * s, h.z };
-                DrawCylinderEx(ventBase, { lx, ry + 0.45f * s, h.z }, 0.95f * s, 0.65f * s, 8, { 42, 28, 26, 255 });
-                DrawCylinderWiresEx(ventBase, { lx, ry + 0.45f * s, h.z }, 0.98f * s, 0.68f * s, 8, ORANGE);
+                // Pressurized volcanic magma geyser erupting upward from the abyssal floor BENEATH the grindrail!
+                float abyssY = std::min(ry - 13.5f * s, -14.85f);
+                Vector3 coneBot = { lx, abyssY, h.z };
+                Vector3 coneTop = { lx, abyssY + 2.85f * s, h.z };
+                Vector3 underRail = { lx, ry - 0.36f * s, h.z };
 
-                float eruptH = (1.8f + std::sin(h.animPhase * 5.0f) * 0.7f) * s;
+                float eruptH = (1.95f + std::sin(h.animPhase * 5.2f) * 0.62f) * s;
                 Vector3 jetTop = { lx, ry + eruptH, h.z };
-                DrawCylinderEx({ lx, ry + 0.35f * s, h.z }, jetTop, 0.55f * s, 0.22f * s, 8, { 255, 95, 15, 240 });
-                DrawCylinderEx({ lx, ry + 0.35f * s, h.z }, jetTop, 0.32f * s, 0.08f * s, 6, YELLOW);
-                DrawSphere(jetTop, 0.45f * s, (std::fmod(h.animPhase, 0.4f) < 0.2f) ? YELLOW : ORANGE);
+
+                // 1. Sub-rail volcanic caldera cone & boiling lava pool on the basin floor far below the rail
+                DrawCylinderEx(coneBot, coneTop, 3.15f * s, 1.32f * s, 8, { 38, 24, 24, 255 });
+                DrawCylinderWiresEx(coneBot, coneTop, 3.20f * s, 1.36f * s, 8, { 255, 105, 20, 210 });
+                DrawCylinderEx({ lx, coneTop.y - 0.18f * s, h.z }, { lx, coneTop.y + 0.14f * s, h.z },
+                               1.48f * s, 1.24f * s, 8, { 255, 130, 22, 235 });
+
+                // 2. Continuous pressurized magma column shooting UP from the sub-rail caldera to the rail underside
+                DrawCylinderEx(coneTop, underRail, 1.14f * s, 0.70f * s, 8, { 255, 72, 12, 220 });
+                DrawCylinderEx(coneTop, underRail, 0.58f * s, 0.36f * s, 6, { 255, 225, 65, 245 });
+
+                // Animated upward-traveling molten surge globules & shock-rings racing from under the rail through the crest
+                for (int p = 0; p < 4; ++p) {
+                    float t = std::fmod(h.animPhase * 0.48f + p * 0.25f, 1.0f);
+                    float py = coneTop.y + (jetTop.y - coneTop.y) * t;
+                    float pr = (0.76f * (1.0f - t * 0.58f)) * s;
+                    Color surgeCol = (p % 2 == 0) ? Color{ 255, 205, 50, 235 } : Color{ 255, 105, 18, 225 };
+                    DrawSphere({ lx, py, h.z }, pr, surgeCol);
+                    DrawCircle3D({ lx, py, h.z }, pr * 1.30f, { 1.0f, 0.0f, 0.0f }, 90.0f, ORANGE);
+                }
+
+                // 3. Under-rail impact flare & superheated rail underside collar (splits around the grindrail from below!)
+                DrawCylinderEx({ lx, ry - 0.65f * s, h.z }, { lx, ry - 0.08f * s, h.z },
+                               0.50f * s, 1.02f * s, 8, { 255, 135, 22, 220 });
+                DrawCylinderEx({ lx, ry - 0.22f * s, h.z - 0.85f * s }, { lx, ry - 0.22f * s, h.z + 0.85f * s },
+                               0.29f * s, 0.29f * s, 6, { 255, 155, 30, 215 });
+                DrawCircle3D({ lx, ry - 0.14f * s, h.z }, 1.06f * s, { 1.0f, 0.0f, 0.0f }, 90.0f, YELLOW);
+
+                // 4. Twin deflected side-streams wrapping past the rail edges + towering upper volcanic plume
+                for (int side = -1; side <= 1; side += 2) {
+                    Vector3 sideBase = { lx + side * 0.36f * s, ry - 0.18f * s, h.z };
+                    Vector3 sideMid  = { lx + side * 0.44f * s, ry + eruptH * 0.42f, h.z };
+                    DrawCylinderEx(sideBase, sideMid, 0.26f * s, 0.14f * s, 6, { 255, 120, 20, 230 });
+                    DrawCylinderEx(sideMid, jetTop, 0.14f * s, 0.06f * s, 6, { 255, 195, 45, 225 });
+
+                    // Outward-splashing molten droplets knocked off the underside of the rail
+                    float splashBob = std::fmod(h.animPhase * 1.6f + (side > 0 ? 0.5f : 0.0f), 1.0f);
+                    Vector3 dropPos = {
+                        lx + side * (0.45f + splashBob * 0.55f) * s,
+                        ry - 0.10f * s + std::sin(splashBob * 3.14159f) * 0.65f * s,
+                        h.z + side * (splashBob - 0.5f) * 0.45f * s
+                    };
+                    DrawSphere(dropPos, (0.16f * (1.0f - splashBob * 0.45f)) * s, YELLOW);
+                }
+
+                DrawCylinderEx({ lx, ry - 0.12f * s, h.z }, jetTop, 0.62f * s, 0.22f * s, 8, { 255, 88, 15, 235 });
+                DrawCylinderEx({ lx, ry - 0.12f * s, h.z }, jetTop, 0.34f * s, 0.09f * s, 6, { 255, 242, 90, 250 });
+                DrawSphere(jetTop, 0.44f * s, (std::fmod(h.animPhase, 0.4f) < 0.2f) ? YELLOW : ORANGE);
                 break;
             }
             case HazardKind::HOVER_TAXI: {
